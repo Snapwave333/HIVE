@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/hive-banner.svg" alt="H.I.V.E. Cybernetic Agency Banner" width="100%">
+<img src="Assets/hive-banner.svg" alt="H.I.V.E. Cybernetic Agency Banner" width="100%">
 
 <br/>
 
