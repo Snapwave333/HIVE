@@ -1,158 +1,185 @@
+<div align="center">
+
+<img src="assets/hive-banner.svg" alt="H.I.V.E. Cybernetic Agency Banner" width="100%">
+
+<br/>
+
+[![Engine: Unity 3D](https://img.shields.io/badge/Engine-Unity_2022.3_LTS-000000.svg?style=for-the-badge&logo=unity&logoColor=white)](https://unity.com/)
+[![Render Pipeline: URP](https://img.shields.io/badge/Render-Universal_RP-22c55e.svg?style=for-the-badge)](https://unity.com/srp/universal-render-pipeline)
+[![Routing: NVIDIA NIM Cascade](https://img.shields.io/badge/LLM-NVIDIA_NIM_Cascade-76b900.svg?style=for-the-badge&logo=nvidia&logoColor=white)](https://www.nvidia.com/en-us/ai-data-science/products/nim/)
+[![Agents: 12 Persistent](https://img.shields.io/badge/Agency-12_Persistent_Agents-10b981.svg?style=for-the-badge)](#-12-persistent-agents)
+[![Platform: Windows 64-bit](https://img.shields.io/badge/Platform-Windows_64--bit-0078d4.svg?style=for-the-badge&logo=windows&logoColor=white)](#)
+
+<br/>
+
 # H.I.V.E. — Borg Cube Autonomous AI Agency Headquarters
 
-Immersive 3D cybernetic headquarters for a 12-agent autonomous AI agency. Built in Unity with NVIDIA NIM cascade fallback LLM routing.
+**An immersive 3D cybernetic headquarters for a 12-agent autonomous AI agency built in Unity with resilient NVIDIA NIM cascade routing.**
 
-## Overview
+<br/>
 
-H.I.V.E. (Hierarchical Intelligence Virtual Environment) is the operational headquarters for a 12-agent autonomous AI agency. It combines:
+[Overview](#-overview) • [Quick Start](#-quick-start) • [Architecture](#-architecture--nim-cascade-router) • [3D Environments](#-3d-headquarters-7-zones) • [Command Interface](#-command-interface) • [Configuration](#-configuration)
 
-- **Immersive 3D Environment** — Navigable Borg-inspired cybernetic megastructure
-- **12 Persistent Agents** — Each with unique role, workspace, memory, and personality
-- **NIM Cascade Router** — Claude → NVIDIA NIM → Gemini fallback (ported from StickExplainers)
-- **Unified Command Interface** — Chat, terminal, voice, file attachments, visual controls
-- **Customizable Dashboards** — Drag-drop panels, 3 density modes, 8 presets
-- **Security & Approvals** — Explicit approval flows, credential vault, audit log, emergency controls
+</div>
 
-## Quick Start
+---
+
+## 📑 Table of Contents
+
+- [🌌 Overview](#-overview)
+- [⚡ Quick Start](#-quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation & First Run](#installation--first-run)
+- [🗺️ Architecture & NIM Cascade Router](#-architecture--nim-cascade-router)
+- [🤖 12 Persistent Agents](#-12-persistent-agents)
+- [🏢 3D Headquarters (7 Zones)](#-3d-headquarters-7-zones)
+- [💻 Command Interface](#-command-interface)
+- [⚙️ Configuration & Environment](#-configuration--environment)
+- [📁 Project Layout](#-project-layout)
+- [📄 License & Credits](#-license--credits)
+
+---
+
+## 🌌 Overview
+
+**H.I.V.E.** (*Hierarchical Intelligence Virtual Environment*) is an autonomous operations headquarters inside a navigable, Borg-inspired cybernetic megastructure. 
+
+Key architectural pillars:
+- **Immersive 3D Cybernetic Megastructure:** 7 specialized operational zones (Command Chamber, Atrium, Collab Chamber, Knowledge Archive, Infrastructure).
+- **12 Persistent Autonomous Agents:** Each agent maintains dedicated workspace geometry, episodic memory indexes, personality attributes, and tool sets.
+- **NIM Cascade Fallback Router:** Automatic fallback pipeline (`Claude` → `NVIDIA NIM Free Tier` → `Gemini`) with circuit breakers, auto-reordering of slow endpoints, and token optimization.
+- **Unified Multimodal Command Shell:** Drive agents using text chat, interactive terminals, push-to-talk voice (Whisper + Piper TTS), file attachments, or holographic 3D widgets.
+- **Cognitive Density Modes:** Toggle between `Dense` (power monitoring), `Comfortable` (balanced), and `Focus` (ADHD-friendly UI filtering).
+
+---
+
+## ⚡ Quick Start
 
 ### Prerequisites
 
-1. **Unity 2022.3 LTS or 2023.2+** (URP, .NET Standard 2.1)
-   - Download: https://unity.com/download
-   - Install via Unity Hub: Editor + Universal RP + Visual Studio Editor
-
-2. **API Keys** (set as environment variables)
-   ```
+1. **Unity 2022.3 LTS or 2023.2+** with Universal Render Pipeline (URP) and .NET Standard 2.1.
+2. **API Keys** (set as environment variables):
+   ```bash
    ANTHROPIC_API_KEY=your_claude_key
    NVIDIA_API_KEY=your_nim_key
-   GEMINI_API_KEY=your_gemini_key  # optional, for fallback tier
+   GEMINI_API_KEY=your_gemini_key  # Optional fallback tier
    ```
+3. **Git LFS** (for large 3D meshes, textures, and audio assets).
 
-3. **Git** (for version control)
-
-### Installation
-
-```bash
-# Clone or navigate to project
-cd "C:/Users/chrom/Desktop/1 📂 Projects/H.I.V.E"
-
-# Open in Unity Hub → Add Project → Select this folder
-# Unity will import packages and compile scripts
-```
-
-### First Run
-
-1. Open `Assets/Scenes/CommandChamber.unity` (create if missing)
-2. Enter Play Mode
-3. Press `~` (tilde) to open Command Input
-4. Type `@PRIME status` — should route through NIM cascade and return response
-
-## Project Structure
-
-```
-H.I.V.E/
-├── Assets/
-│   ├── Runtime/
-│   │   ├── Core/           # Logging, MessageBus, Repository
-│   │   ├── LLM/            # NimCascadeRouter (Claude→NIM→Gemini)
-│   │   ├── Agents/         # AgentSpawner, RelationshipGraph
-│   │   ├── Tasks/          # TaskManager, states
-│   │   ├── Memory/         # MemoryStore (JSONL + vector index)
-│   │   ├── Skills/         # ISkill plugin system
-│   │   ├── Persistence/    # SQLite/LiteDB repository
-│   │   ├── Security/       # PermissionInspector, CredentialVault, AuditLog
-│   │   ├── UI/             # Panels, Widgets, CommandInput, Terminal
-│   │   ├── Camera/         # AdaptiveCamera (FPS/TPS/Iso/Overview)
-│   │   └── Voice/          # Whisper.cpp + Piper TTS
-│   ├── Editor/
-│   │   └── ModelLab/       # ModelLab.cs — NIM benchmarking → cascade.json
-│   ├── StreamingAssets/
-│   │   ├── cascade.json    # Ranked NIM model lists (auto-updated)
-│   │   ├── config.json     # Runtime configuration
-│   │   └── agents/         # 12 agent definition JSONs
-│   ├── Art/
-│   │   ├── Architecture/   # Modular corridor/room prefabs
-│   │   └── Materials/      # Borg aesthetic materials
-│   ├── Scenes/             # 7 HQ areas
-│   └── Prefabs/Agents/     # 12 unique workspaces
-├── ProjectSettings/
-├── docs/
-└── AGENTS.md               # Agent roster & schema
-```
-
-## Key Systems
-
-### NimCascadeRouter (`Assets/Runtime/LLM/NimCascadeRouter.cs`)
-
-Port of StickExplainers' `stickfx/llm.py`. Priority chain:
-
-1. **Claude** (ANTHROPIC_API_KEY) — primary, credits permitting
-2. **NIM Cascade** (NVIDIA_API_KEY) — ranked by Model Lab benchmarks
-   - Breaker per model (429→Retry-After, 5xx→2/10/30 min cooldown)
-   - Slow successes (>90s) moved to back for 30 min
-   - Short calls (<4k tokens): thinking off, +2048 reasoning room
-3. **Gemini** (GEMINI_API_KEY) — only if `config.json: llm.gemini_fallback=true`
-
-State persisted to `~/.hive/llm_state.json`.
-
-### Model Lab (`Assets/Editor/ModelLab/ModelLab.cs`)
-
-Editor window (Menu: **HIVE → Model Lab**):
-- Fetches live NIM model list
-- Benchmarks selected models (quality/reliability/speed)
-- Writes `Assets/StreamingAssets/cascade.json` with ranked lists
-- Run weekly to keep cascade current
-
-### Agent Runtime
-
-Each agent defined in `Assets/StreamingAssets/agents/{codename}.json` with:
-- Role, personality, skills[], tools[], permissions{}
-- Workspace theme, avatar config, memory index
-- Spawned by `AgentSpawner` on startup
-
-### 3D Headquarters (7 Areas)
-
-| Scene | Purpose |
-|-------|---------|
-| `CommandChamber.unity` | Central hub — agency overview, agent activity, owner command |
-| `Workspace_[Agent].unity` | 12 unique workspaces — role-appropriate geometry |
-| `CollabChamber.unity` | Multi-agent collaboration, shared holographic tables |
-| `KnowledgeArchive.unity` | Searchable memory nodes, project docs, decisions |
-| `Infrastructure.unity` | Visual runtime: model status, queues, breakers |
-| `OwnerControl.unity` | Approvals, permissions, emergency controls, audit |
-| `Atrium.unity` | Transition space connecting all areas |
-
-## Development
-
-### Running Tests
+### Installation & First Run
 
 ```bash
-# In Unity: Window → General → Test Runner
-# Or CLI:
-unity -batchmode -runTests -projectPath . -testResults results.xml
+# Clone the repository
+git clone https://github.com/Snapwave333/hive-unity.git
+
+# Open Unity Hub -> Add Project -> Select the H.I.V.E folder
 ```
 
-### Building
+1. In the Project window, open `Assets/Scenes/CommandChamber.unity`.
+2. Press **Play Mode** in the Unity Editor.
+3. Tap **`~`** (tilde) to toggle the Command Input overlay.
+4. Execute:
+   ```text
+   @PRIME status
+   ```
+   The request routes through the live NIM cascade and streams a response from agency leadership.
 
-```bash
-# Windows Standalone (64-bit)
-unity -batchmode -buildWindows64Player "Build/HIVE.exe" -projectPath .
+---
+
+## 🗺️ Architecture & NIM Cascade Router
+
+```mermaid
+graph TD
+    subgraph UI["🖥️ Unified Command Shell"]
+        Chat["Chat / Voice Input (Whisper.cpp)"]
+        Holo["3D Holographic Tables"]
+        Term["Interactive Terminal"]
+    end
+
+    subgraph Core["⚡ H.I.V.E. Core Runtime"]
+        MBus["Event MessageBus"]
+        AgentManager["AgentSpawner & Roster"]
+        Router["NimCascadeRouter<br/>(circuit breaker & cooldowns)"]
+    end
+
+    subgraph LLM["☁️ Resilient Multi-Tier Cascade"]
+        Claude["Tier 1: Claude 3.7 Sonnet<br/>(Thinking enabled)"]
+        NIM["Tier 2: NVIDIA NIM Ranked Fleet<br/>(Llama 3.3 70B, DeepSeek R1, Qwen 2.5)"]
+        Gemini["Tier 3: Gemini 2.0 Flash<br/>(Emergency fallback)"]
+    end
+
+    Chat --> MBus
+    Holo --> MBus
+    Term --> MBus
+    MBus --> AgentManager
+    AgentManager --> Router
+    Router --> Claude
+    Claude -.->|Rate limit / Fail| NIM
+    NIM -.->|Timeout / Exhausted| Gemini
 ```
 
-### Adding a New Agent
+### Circuit Breakers & Cooldown Engine
+- **429 Rate Limits:** Honors HTTP `Retry-After` headers automatically.
+- **5xx Outages:** Applies escalating cooldowns (2 min → 10 min → 30 min).
+- **Latency Deprioritization:** Calls exceeding 90 seconds are automatically shifted to the back of the cascade for 30 minutes.
+- **Persistent State:** Network health is journaled to `~/.hive/llm_state.json`.
 
-1. Create `Assets/StreamingAssets/agents/NEWCODE.json` (see AGENTS.md schema)
-2. Create workspace prefab: `Assets/Prefabs/Agents/Workspace_NEWCODE.prefab`
-3. Add to `AgentSpawner` registry
-4. Run Model Lab to ensure model tier available
+---
 
-## Configuration
+## 🤖 12 Persistent Agents
 
-### config.json (`Assets/StreamingAssets/config.json`)
+| Code | Role | Domain & Skills | Workspace Prefab |
+|---|---|---|---|
+| **@PRIME** | Agency Director | Mission planning, delegation, budget & approval gates | `Workspace_PRIME.prefab` |
+| **@ARCHON** | System Architect | Tech stack design, API contracts, infrastructure | `Workspace_ARCHON.prefab` |
+| **@SCRIBE** | Documentation & PR | Technical writing, changelogs, public releases | `Workspace_SCRIBE.prefab` |
+| **@SENTINEL**| Security & Auditing | Permission auditing, credential vault, security | `Workspace_SENTINEL.prefab` |
+| **@FORGE** | Build & Devops | CI/CD pipelines, package deployment, containerization | `Workspace_FORGE.prefab` |
+| **@CIPHER** | Data & Knowledge | Vector memory index, SQLite storage, graph search | `Workspace_CIPHER.prefab` |
+| *+6 Specialized* | Agents | UI/UX, QA, Audio/Voice, Outreach, Media, Analytics | Custom agent workspaces |
+
+> Full JSON agent schemas and tool permissions are documented in [AGENTS.md](AGENTS.md).
+
+---
+
+## 🏢 3D Headquarters (7 Zones)
+
+| Scene | Purpose & Key Geometry |
+|---|---|
+| **`CommandChamber.unity`** | Central hexagonal operations hub; holographic overview table, agency monitors, and owner throne. |
+| **`Workspace_[Agent].unity`** | 12 dedicated cubicles with role-appropriate cybernetic terminals and personal memory vaults. |
+| **`CollabChamber.unity`** | Multi-agent synthesis chamber with collaborative holographic projection boards. |
+| **`KnowledgeArchive.unity`** | Navigable 3D memory bank visualizing embeddings as glowing green datastacks. |
+| **`Infrastructure.unity`** | Real-time diagnostic room rendering active model breakers, network queues, and token gauges. |
+| **`OwnerControl.unity`** | Master control panel with physical biometric authorization switches and emergency kill levers. |
+| **`Atrium.unity`** | High-ceiling transit concourse linking all 6 outer wings. |
+
+---
+
+## 💻 Command Interface
+
+Access the agency command line by pressing **`~`** (tilde) or clicking the bottom-right HUD prompt:
+
+```text
+@PRIME analyze logs              # Direct instruction to specific agent
+/project "FCC Serenity Studio"   # Switch context to an active project
+task #128 status                 # Query specific sub-task execution
+/terminal                        # Open full-screen ANSI terminal
+/voice                           # Engage push-to-talk voice interface
+attach logs/error.log            # Attach local project file into context
+```
+
+---
+
+## ⚙️ Configuration & Environment
+
+### `Assets/StreamingAssets/config.json`
 
 ```json
 {
-  "llm": { "gemini_fallback": false },
+  "llm": {
+    "gemini_fallback": false
+  },
   "hive": {
     "agent_count": 12,
     "density_mode": "comfortable",
@@ -163,49 +190,37 @@ unity -batchmode -buildWindows64Player "Build/HIVE.exe" -projectPath .
 }
 ```
 
-### Environment Variables
+---
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `ANTHROPIC_API_KEY` | Yes* | Claude access (primary) |
-| `NVIDIA_API_KEY` | Yes | NIM cascade (free tier) |
-| `GEMINI_API_KEY` | No | Gemini fallback tier |
-| `HIVE_LLM` | No | Override: "claude" or "nim" |
-| `HIVE_LLM_TEST` | No | Enable test mode (no Telegram alerts) |
+## 📁 Project Layout
 
-*Required unless running in `free_only` mode.
-
-## Density Modes
-
-- **Dense** — Maximum panels, compact spacing, all metrics visible
-- **Comfortable** — Balanced, default
-- **Focus** — ADHD-friendly: hides non-critical UI, reduces animation, highlights single next action
-
-Toggle with `Ctrl+Shift+D` or Command Input: `density focus`
-
-## Command Interface
-
-Access via `~` (tilde) or Command Input panel:
-
-```
-@PRIME analyze logs           # Direct agent command
-/project "Website Redesign"   # Context: project
-task #42 status              # Context: task
-/terminal                    # Switch to terminal mode
-/voice                       # Push-to-talk
-attach logs/error.log        # File attachment
+```text
+H.I.V.E/
+├── assets/                  # Hero banner and brand assets
+│   └── hive-banner.svg      # 1280×440 Borg cybernetic banner
+├── Assets/
+│   ├── Runtime/             # Production C# assemblies
+│   │   ├── Core/            # MessageBus, Repository, Logger
+│   │   ├── LLM/             # NimCascadeRouter & circuit breakers
+│   │   ├── Agents/          # AgentSpawner & RelationshipGraph
+│   │   ├── Memory/          # Local JSONL & vector embeddings
+│   │   └── UI/              # Cybernetic panels, HUD widgets, CommandInput
+│   ├── Editor/ModelLab/     # Model benchmark & cascade ranker window
+│   ├── StreamingAssets/     # cascade.json, config.json, and agent schemas
+│   ├── Scenes/              # 7 HQ operational unity scenes
+│   └── Prefabs/             # 12 agent cubicles and architectural modular kit
+└── AGENTS.md                # Full agent roster specifications
 ```
 
-## Roadmap
+---
 
-See [ROADMAP.md](docs/ROADMAP.md) for 20-week phased implementation plan.
+## 📄 License & Credits
 
-## License
+- Proprietary internal architecture for Snapwave Creative Labs.
+- NIM Cascade Router adapted from StickExplainers `stickfx/llm.py`.
+- Borg aesthetic inspired by *Star Trek* (original clean-room IP implementation).
 
-Proprietary — Internal use only.
-
-## Credits
-
-- NIM Cascade Router ported from [StickExplainers](https://github.com/your/stickexplainers) `stickfx/llm.py`
-- Borg aesthetic inspired by *Star Trek* (original IP-safe implementation)
-- Unity URP, DOTS, Addressables, Input System
+<div align="center">
+  <br/>
+  <p>Crafted with 💖 by <b>snapwave//Lushapps</b></p>
+</div>
