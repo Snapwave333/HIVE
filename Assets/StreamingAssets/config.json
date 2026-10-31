@@ -1,0 +1,21 @@
+{
+  "llm": {
+    "gemini_fallback": false
+  },
+  "hive": {
+    "agent_count": 12,
+    "density_mode": "comfortable",
+    "animation_level": "full",
+    "focus_mode_enabled": true,
+    "daily_briefing_time": "08:00"
+  },
+  "camera": {
+    "default_mode": "isometric",
+    "transition_duration": 0.5
+  },
+  "ui": {
+    "font_scale": 1.0,
+    "high_contrast": false,
+    "reduced_motion": false
+  }
+}
