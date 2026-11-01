@@ -216,7 +216,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                   <button
                     onClick={handleRollback}
-                    className="px-2.5 py-1.5 rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 flex items-center gap-1"
+                    className="px-2.5 py-1.5 rounded bg-hive-base border border-hive-border text-hive-dimText hover:text-hive-brightText flex items-center gap-1"
                   >
                     <M3Icon name="history" size={15} /> Rollback
                   </button>
@@ -344,7 +344,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                       <button
                         onClick={() => handleDeleteMemory(m.id)}
-                        className="text-hive-dimText hover:text-red-400 p-1"
+                        className="text-hive-dimText hover:text-hive-lime p-1"
                         title="Delete memory record"
                       >
                         <M3Icon name="delete" size={15} />
@@ -484,22 +484,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => api.hideMainWindow()}
-                  className="p-3 rounded border bg-hive-surface border-hive-border text-hive-brightText hover:border-hive-cyan flex items-center justify-center gap-1.5 font-medium"
+                  className="p-3 rounded-lg border bg-hive-surface border-hive-border text-hive-brightText hover:border-hive-lime/50 flex items-center justify-center gap-1.5 font-medium"
                 >
-                  <M3Icon name="visibility_off" size={16} className="text-hive-cyan" /> Hide Window (Tray)
+                  <M3Icon name="visibility_off" size={16} className="text-hive-lime" /> Hide Window (Tray)
                 </button>
 
                 {agencyState === "running" ? (
                   <button
                     onClick={() => onSetAgencyState("paused")}
-                    className="p-3 rounded border bg-hive-surface border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10 flex items-center justify-center gap-1.5 font-medium"
+                    className="p-3 rounded-lg border bg-hive-surface border-hive-border text-hive-brightText hover:border-hive-lime/50 flex items-center justify-center gap-1.5 font-medium"
                   >
-                    <M3Icon name="pause" filled size={16} /> Pause Agency
+                    <M3Icon name="pause" filled size={16} className="text-hive-lime" /> Pause Agency
                   </button>
                 ) : (
                   <button
                     onClick={() => onSetAgencyState("running")}
-                    className="p-3 rounded border bg-hive-lime text-hive-base border-hive-lime flex items-center justify-center gap-1.5 font-semibold"
+                    className="p-3 rounded-lg border bg-hive-lime text-hive-base border-hive-lime flex items-center justify-center gap-1.5 font-semibold"
                   >
                     <M3Icon name="play_arrow" filled size={16} /> Resume Agency
                   </button>
@@ -507,7 +507,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   onClick={() => api.stopAgencyAndQuit()}
-                  className="p-3 rounded border bg-red-500/15 border-red-500/40 text-red-300 hover:bg-red-500/25 flex items-center justify-center gap-1.5 font-medium"
+                  className="p-3 rounded-lg border bg-hive-base border-hive-border text-hive-dimText hover:text-hive-brightText hover:border-hive-lime/40 flex items-center justify-center gap-1.5 font-medium"
                 >
                   <M3Icon name="power_settings_new" size={16} /> Stop Agency & Quit
                 </button>

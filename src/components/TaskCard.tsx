@@ -15,29 +15,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
   const currentStep = task.steps[task.current_step_index] || task.steps[task.steps.length - 1];
 
   return (
-    <div className="my-2.5 p-3 rounded-lg bg-hive-panel border border-hive-border hover:border-hive-cyan/40 transition-all select-none">
+    <div className="my-2.5 p-3.5 rounded-xl bg-hive-panel border border-hive-border hover:border-hive-lime/40 transition-all select-none">
       {/* Task Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center space-x-2 min-w-0">
-          <div className="p-1 rounded bg-hive-surface border border-hive-cyan/30 text-hive-cyan flex items-center justify-center">
+          <div className="p-1.5 rounded-lg bg-hive-surface border border-hive-lime/30 text-hive-lime flex items-center justify-center flex-shrink-0">
             <M3Icon name="checklist" size={15} />
           </div>
           <span className="font-semibold text-xs text-hive-brightText truncate">
             {task.title}
           </span>
-          <span className="text-[10px] bg-hive-surface px-1.5 py-0.2 rounded text-hive-dimText border border-hive-border font-mono">
-            {task.assignee}
+          <span className="text-[10px] bg-hive-surface px-1.5 py-0.5 rounded-md text-hive-dimText border border-hive-border font-mono flex-shrink-0">
+            @{task.assignee}
           </span>
         </div>
 
         <div className="flex items-center space-x-1.5 flex-shrink-0">
-          <span
-            className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-              task.status === "completed"
-                ? "bg-hive-lime/10 text-hive-lime border border-hive-lime/30"
-                : "bg-hive-cyan/10 text-hive-cyan border border-hive-cyan/30"
-            }`}
-          >
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-mono bg-hive-lime/10 text-hive-lime border border-hive-lime/30">
             {task.status.toUpperCase()}
           </span>
           <span className="text-[10px] text-hive-dimText font-mono">{progressPercent}%</span>
@@ -45,7 +39,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-hive-surface h-1.5 rounded-full mt-2.5 overflow-hidden border border-hive-border">
+      <div className="w-full bg-hive-surface h-1.5 rounded-full mt-3 overflow-hidden border border-hive-border">
         <div
           className="bg-hive-lime h-full transition-all duration-300 rounded-full"
           style={{ width: `${progressPercent}%` }}
@@ -54,11 +48,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
 
       {/* Active 5-Minute Micro-Action (ADHD Anti-Overload) */}
       {currentStep && (
-        <div className="mt-3 p-2 rounded bg-hive-surface border border-hive-cyan/30 flex items-start justify-between">
-          <div className="flex items-start space-x-2 min-w-0">
+        <div className="mt-3 p-2.5 rounded-lg bg-hive-surface border border-hive-border flex items-start justify-between">
+          <div className="flex items-start space-x-2.5 min-w-0">
             <button
               onClick={() => onStepToggle(task.id, currentStep.index, !currentStep.completed)}
-              className="mt-0.5 text-hive-cyan hover:text-hive-lime transition-colors flex-shrink-0"
+              className="mt-0.5 text-hive-lime hover:opacity-80 transition-opacity flex-shrink-0"
             >
               {currentStep.completed ? (
                 <M3Icon name="check_circle" filled size={17} className="text-hive-lime" />
@@ -67,8 +61,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
               )}
             </button>
             <div className="min-w-0">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-wide text-hive-cyan">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-hive-lime">
                   Action Step {currentStep.index + 1}/{totalCount}
                 </span>
                 <span className="text-[10px] text-hive-dimText flex items-center gap-0.5">
@@ -76,7 +70,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
                 </span>
               </div>
               <p
-                className={`text-xs mt-0.5 ${
+                className={`text-xs mt-1 leading-relaxed ${
                   currentStep.completed
                     ? "line-through text-hive-dimText"
                     : "text-hive-brightText font-medium"
@@ -91,8 +85,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
 
       {/* Saved Checkpoint Indicator */}
       {task.resume_checkpoint && (
-        <div className="mt-2 flex items-center text-[10px] text-hive-dimText space-x-1.5 bg-hive-base/50 px-2 py-1 rounded border border-hive-border/60">
-          <M3Icon name="bookmark_added" size={13} className="text-hive-cyan flex-shrink-0" />
+        <div className="mt-2.5 flex items-center text-[10px] text-hive-dimText space-x-1.5 bg-hive-base px-2.5 py-1.5 rounded-lg border border-hive-border">
+          <M3Icon name="bookmark_added" size={13} className="text-hive-lime flex-shrink-0" />
           <span className="truncate">Checkpoint: {task.resume_checkpoint}</span>
         </div>
       )}

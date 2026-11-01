@@ -130,10 +130,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
-      className={`bg-hive-panel border-t p-3 relative select-none transition-colors ${
+      className={`bg-hive-panel border-t px-8 py-4 relative select-none transition-colors flex-shrink-0 ${
         isDragging ? "border-hive-lime bg-hive-lime/5" : "border-hive-border"
       }`}
     >
+      <div className="max-w-5xl mx-auto w-full relative">
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -144,9 +145,9 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
       {/* Replying banner */}
       {replyingTo && (
-        <div className="mb-2 px-3 py-1.5 rounded bg-hive-surface border-l-2 border-hive-cyan flex items-center justify-between text-xs">
+        <div className="mb-2.5 px-3.5 py-2 rounded-xl bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs">
           <div className="truncate">
-            <span className="text-hive-cyan font-medium">Replying to {replyingTo.sender}: </span>
+            <span className="text-hive-lime font-semibold">Replying to @{replyingTo.sender}: </span>
             <span className="text-hive-dimText">{replyingTo.snippet}</span>
           </div>
           <button
@@ -160,8 +161,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
       {/* Attached File Preview */}
       {attachedFileInfo && (
-        <div className="mb-2 px-3 py-1.5 rounded bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs font-mono">
-          <span className="text-hive-lime truncate flex items-center gap-1">
+        <div className="mb-2.5 px-3.5 py-2 rounded-xl bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs font-mono">
+          <span className="text-hive-lime truncate flex items-center gap-1.5">
             <M3Icon name="attach_file" size={14} /> {attachedFileInfo}
           </span>
           <button
@@ -175,7 +176,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
       {/* Kaomoji Drawer */}
       {showKaomoji && (
-        <div className="absolute bottom-16 left-3 bg-hive-panel border border-hive-border rounded-lg shadow-xl p-2 z-30 flex flex-wrap gap-1 max-w-xs">
+        <div className="absolute bottom-16 left-0 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-wrap gap-1.5 max-w-xs">
           {KAOMOJIS.map((k) => (
             <button
               key={k}
@@ -183,7 +184,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 insertText(` ${k} `);
                 setShowKaomoji(false);
               }}
-              className="px-2 py-1 bg-hive-surface hover:bg-hive-cyan/20 text-xs rounded font-mono text-hive-brightText transition-colors"
+              className="px-2.5 py-1 bg-hive-surface hover:border-hive-lime/50 border border-hive-border text-xs rounded-lg font-mono text-hive-brightText transition-colors"
             >
               {k}
             </button>
@@ -193,7 +194,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
       {/* Emoji Picker */}
       {showEmojis && (
-        <div className="absolute bottom-16 left-12 bg-hive-panel border border-hive-border rounded-lg shadow-xl p-2 z-30 flex flex-wrap gap-1.5 max-w-xs">
+        <div className="absolute bottom-16 left-12 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-wrap gap-1.5 max-w-xs">
           {EMOJIS.map((e) => (
             <button
               key={e}
@@ -201,7 +202,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 insertText(e);
                 setShowEmojis(false);
               }}
-              className="w-7 h-7 flex items-center justify-center hover:bg-hive-surface rounded text-sm transition-colors"
+              className="w-8 h-8 flex items-center justify-center hover:bg-hive-surface rounded-lg text-sm transition-colors"
             >
               {e}
             </button>
@@ -211,7 +212,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
       {/* GIF Picker */}
       {showGifs && (
-        <div className="absolute bottom-16 right-16 bg-hive-panel border border-hive-border rounded-lg shadow-xl p-2 z-30 flex flex-col gap-1 w-48">
+        <div className="absolute bottom-16 right-16 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-col gap-1.5 w-48">
           <div className="text-[10px] text-hive-dimText uppercase font-semibold px-1">
             Quick GIFs
           </div>
@@ -222,7 +223,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 onSendMessage(g.text, replyingTo?.id);
                 setShowGifs(false);
               }}
-              className="px-2 py-1.5 text-left bg-hive-surface hover:bg-hive-cyan/20 text-xs rounded text-hive-brightText transition-colors"
+              className="px-2.5 py-1.5 text-left bg-hive-surface hover:border-hive-lime/50 border border-hive-border text-xs rounded-lg text-hive-brightText transition-colors"
             >
               {g.label}
             </button>
@@ -231,11 +232,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       )}
 
       {/* Composer Input Area */}
-      <div className="flex items-end space-x-2 bg-hive-surface rounded-lg p-2 border border-hive-border focus-within:border-hive-cyan/50 transition-colors">
+      <div className="flex items-end space-x-2.5 bg-hive-surface rounded-xl px-3.5 py-2 border border-hive-border focus-within:border-hive-lime/50 transition-all">
         {/* Attachment Button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-1.5 rounded hover:bg-hive-panel text-hive-dimText hover:text-hive-brightText transition-colors flex-shrink-0"
+          className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-brightText transition-colors flex items-center justify-center flex-shrink-0"
           title="Attach file (drag & drop or Ctrl+V paste supported)"
         >
           <M3Icon name="attach_file" size={18} />
@@ -248,15 +249,15 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Type a message, @agent, or /help (/gog, /obsidian, /browser, /task, /debate, /deploy)..."
+          placeholder="Message #agency-hq, @agent, or /help (/gog, /obsidian, /browser, /task, /debate, /deploy)..."
           rows={1}
-          className="flex-1 bg-transparent border-none outline-none resize-none text-xs text-hive-brightText placeholder-hive-dimText leading-relaxed max-h-36 py-1 font-segoe"
+          className="flex-1 bg-transparent border-none outline-none resize-none text-[13px] text-hive-brightText placeholder-hive-dimText leading-relaxed max-h-36 py-1 font-segoe"
         />
 
         {/* GIF Trigger Button */}
         <button
           onClick={() => setShowGifs(!showGifs)}
-          className="p-1.5 rounded hover:bg-hive-panel text-hive-dimText hover:text-hive-cyan transition-colors flex-shrink-0"
+          className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
           title="GIF Picker"
         >
           <M3Icon name="gif_box" size={18} />
@@ -265,7 +266,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         {/* Kaomoji Trigger Button */}
         <button
           onClick={() => setShowKaomoji(!showKaomoji)}
-          className="px-1.5 py-1 rounded hover:bg-hive-panel text-[11px] font-mono text-hive-dimText hover:text-hive-cyan transition-colors flex-shrink-0"
+          className="px-2 h-8 rounded-lg hover:bg-hive-base text-[11px] font-mono text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
           title="Kaomoji Drawer (ง'̀-'́)ง"
         >
           (ง'̀-'́)ง
@@ -274,7 +275,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         {/* Emoji Trigger Button */}
         <button
           onClick={() => setShowEmojis(!showEmojis)}
-          className="p-1.5 rounded hover:bg-hive-panel text-hive-dimText hover:text-hive-cyan transition-colors flex-shrink-0"
+          className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
           title="Emoji Picker"
         >
           <M3Icon name="mood" size={18} />
@@ -282,7 +283,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
         {/* Voice Status Indicator */}
         <button
-          className={`p-1.5 rounded transition-colors flex-shrink-0 ${
+          className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
             isMuted
               ? "text-hive-dimText/60 hover:text-hive-dimText"
               : "text-hive-lime hover:bg-hive-lime/10"
@@ -296,15 +297,16 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         <button
           onClick={handleSend}
           disabled={!text.trim() && !attachedFileInfo}
-          className={`p-1.5 rounded transition-colors flex-shrink-0 ${
+          className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
             text.trim() || attachedFileInfo
-              ? "bg-hive-cyan text-hive-base hover:bg-hive-cyan/90 font-bold"
+              ? "bg-hive-lime text-hive-base hover:opacity-90 font-bold"
               : "text-hive-dimText/40 cursor-not-allowed"
           }`}
           title="Send (Enter)"
         >
-          <M3Icon name="send" filled={Boolean(text.trim() || attachedFileInfo)} size={18} />
+          <M3Icon name="send" filled={Boolean(text.trim() || attachedFileInfo)} size={17} />
         </button>
+      </div>
       </div>
     </div>
   );

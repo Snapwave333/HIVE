@@ -50,23 +50,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-hive-base font-segoe select-text">
+    <div className="flex-1 overflow-y-auto px-8 py-6 bg-hive-base font-segoe select-text">
+      <div className="max-w-5xl mx-auto w-full space-y-5">
       {messages.map((msg) => {
         const isUser = msg.sender === "user";
         const agent = !isUser ? getAgent(msg.sender) : undefined;
         const repliedMsg = msg.reply_to_id
           ? messages.find((m) => m.id === msg.reply_to_id)
           : undefined;
-
-        let avatarColor = "#42CFC4";
-        if (agent?.avatar_config) {
-          try {
-            const cfg = JSON.parse(agent.avatar_config);
-            avatarColor = cfg.primary_color || avatarColor;
-          } catch {
-            // ignore
-          }
-        }
 
         let reactionMap: Record<string, string[]> = {};
         if (msg.reactions) {
@@ -86,11 +77,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
           >
             {/* Sender Name & Role Label */}
             {!isUser && (
-              <div className="flex items-center space-x-2 mb-1 px-1 select-none">
-                <span className="text-xs font-semibold" style={{ color: avatarColor }}>
+              <div className="flex items-center space-x-2.5 mb-1.5 px-1 select-none">
+                <span className="text-xs font-semibold text-hive-lime tracking-wide">
+                  @{agent?.codename || msg.sender}
+                </span>
+                <span className="text-[11px] text-hive-brightText font-medium">
                   {agent?.display_name || msg.sender}
                 </span>
-                <span className="text-[10px] bg-hive-surface text-hive-dimText px-1.5 py-0.2 rounded font-mono border border-hive-border">
+                <span className="text-[10px] bg-hive-surface text-hive-dimText px-2 py-0.5 rounded-md font-mono border border-hive-border">
                   {msg.sender_role || agent?.role || "Agent"}
                 </span>
                 <span className="text-[10px] text-hive-dimText font-mono">
@@ -101,33 +95,33 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
             {/* Bubble Container */}
             <div
-              className={`max-w-[78%] rounded-xl px-3.5 py-2.5 relative border shadow-sm ${
+              className={`max-w-[82%] rounded-2xl px-4 py-3 relative border transition-colors ${
                 isUser
-                  ? "bg-hive-outgoing border-hive-outgoingBorder text-hive-brightText rounded-tr-none"
-                  : "bg-hive-incoming border-hive-border text-hive-brightText rounded-tl-none"
+                  ? "bg-hive-outgoing border-hive-outgoingBorder text-hive-brightText rounded-tr-sm"
+                  : "bg-hive-incoming border-hive-border text-hive-brightText rounded-tl-sm"
               }`}
             >
               {/* Reply Quote Banner inside Bubble */}
               {repliedMsg && (
-                <div className="mb-2 px-2.5 py-1 rounded bg-hive-base/60 border-l-2 border-hive-cyan text-[11px]">
-                  <div className="text-hive-cyan font-semibold">{repliedMsg.sender}</div>
-                  <div className="text-hive-dimText truncate">{repliedMsg.content.slice(0, 80)}</div>
+                <div className="mb-2.5 px-3 py-1.5 rounded-lg bg-hive-base border-l-2 border-hive-lime text-[11px]">
+                  <div className="text-hive-lime font-semibold">@{repliedMsg.sender}</div>
+                  <div className="text-hive-dimText truncate mt-0.5">{repliedMsg.content.slice(0, 90)}</div>
                 </div>
               )}
 
               {/* Inline Editing Mode vs Standard Content */}
               {editingId === msg.id ? (
-                <div className="space-y-2 min-w-[260px]">
+                <div className="space-y-2.5 min-w-[300px]">
                   <textarea
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
                     rows={3}
-                    className="w-full bg-hive-base border border-hive-cyan/50 rounded p-2 text-xs text-hive-brightText outline-none"
+                    className="w-full bg-hive-base border border-hive-lime/50 rounded-lg p-2.5 text-xs text-hive-brightText outline-none"
                   />
-                  <div className="flex justify-end space-x-1.5">
+                  <div className="flex justify-end space-x-2">
                     <button
                       onClick={() => setEditingId(null)}
-                      className="px-2 py-1 text-[10px] rounded bg-hive-surface text-hive-dimText hover:text-hive-brightText flex items-center gap-1"
+                      className="px-2.5 py-1 text-[11px] rounded-lg bg-hive-surface text-hive-dimText hover:text-hive-brightText flex items-center gap-1 border border-hive-border"
                     >
                       <M3Icon name="close" size={13} /> Cancel
                     </button>
@@ -138,30 +132,31 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                         }
                         setEditingId(null);
                       }}
-                      className="px-2 py-1 text-[10px] rounded bg-hive-cyan text-hive-base font-semibold flex items-center gap-1"
+                      className="px-2.5 py-1 text-[11px] rounded-lg bg-hive-lime text-hive-base font-semibold flex items-center gap-1"
                     >
                       <M3Icon name="check" size={13} /> Save
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="text-xs leading-relaxed prose prose-invert max-w-none break-words">
+                <div className="text-[13px] leading-relaxed prose prose-invert max-w-none break-words">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                       code: ({ children }) => (
-                        <code className="bg-hive-base px-1 py-0.5 rounded text-[11px] font-mono text-hive-cyan border border-hive-border">
+                        <code className="bg-hive-base px-1.5 py-0.5 rounded-md text-[11.5px] font-mono text-hive-lime border border-hive-border">
                           {children}
                         </code>
                       ),
                       pre: ({ children }) => (
-                        <pre className="bg-hive-base p-2.5 rounded-lg border border-hive-border text-[11px] font-mono overflow-x-auto my-2 text-hive-lime">
+                        <pre className="bg-hive-base p-3 rounded-xl border border-hive-border text-[11.5px] font-mono overflow-x-auto my-2.5 text-hive-lime">
                           {children}
                         </pre>
                       ),
-                      ul: ({ children }) => <ul className="list-disc ml-4 my-1">{children}</ul>,
-                      li: ({ children }) => <li className="my-0.5">{children}</li>,
+                      ul: ({ children }) => <ul className="list-disc ml-5 my-1.5 space-y-1">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal ml-5 my-1.5 space-y-1">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
                       strong: ({ children }) => (
                         <strong className="text-hive-brightText font-semibold">{children}</strong>
                       ),
@@ -174,11 +169,11 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
               {/* Attachments badge */}
               {msg.attachments && (
-                <div className="mt-2 px-2.5 py-1.5 rounded bg-hive-base/70 border border-hive-border text-[11px] font-mono text-hive-cyan flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <M3Icon name="attach_file" size={13} /> Attachment attached
+                <div className="mt-2.5 px-3 py-2 rounded-lg bg-hive-base border border-hive-border text-[11px] font-mono text-hive-lime flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <M3Icon name="attach_file" size={14} /> Attachment attached
                   </span>
-                  <span className="text-hive-dimText text-[10px] truncate max-w-[180px]">
+                  <span className="text-hive-dimText text-[10px] truncate max-w-[200px]">
                     {msg.attachments}
                   </span>
                 </div>
@@ -191,15 +186,15 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
               {/* Reactions Row */}
               {Object.keys(reactionMap).length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2 select-none">
+                <div className="flex flex-wrap gap-1.5 mt-2.5 select-none">
                   {Object.entries(reactionMap).map(([emoji, users]) => (
                     <button
                       key={emoji}
                       onClick={() => onReact(msg.id, emoji)}
-                      className="px-2 py-0.5 rounded-full bg-hive-base/80 border border-hive-cyan/40 text-[11px] flex items-center space-x-1 hover:bg-hive-cyan/20 transition-colors"
+                      className="px-2.5 py-0.5 rounded-full bg-hive-base border border-hive-lime/40 text-[11px] flex items-center space-x-1.5 hover:bg-hive-lime/15 transition-colors"
                     >
                       <span>{emoji}</span>
-                      <span className="text-[10px] text-hive-cyan font-mono">{users.length}</span>
+                      <span className="text-[10px] text-hive-lime font-mono">{users.length}</span>
                     </button>
                   ))}
                 </div>
@@ -207,14 +202,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
               {/* Forward Channel Picker Popover */}
               {forwardingId === msg.id && (
-                <div className="mt-2 p-2 rounded bg-hive-panel border border-hive-border shadow-xl text-xs space-y-1.5 select-none">
+                <div className="mt-2.5 p-2.5 rounded-xl bg-hive-panel border border-hive-border shadow-2xl text-xs space-y-2 select-none">
                   <div className="flex items-center justify-between text-[10px] text-hive-dimText uppercase font-semibold">
                     <span>Forward message to:</span>
                     <button onClick={() => setForwardingId(null)} className="hover:text-hive-brightText">
                       <M3Icon name="close" size={13} />
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                     {channels.map((ch) => (
                       <button
                         key={ch.id}
@@ -222,7 +217,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                           onForward(msg.id, ch.id);
                           setForwardingId(null);
                         }}
-                        className="px-2 py-0.5 rounded bg-hive-surface hover:bg-hive-cyan/20 text-[11px] border border-hive-border text-hive-brightText"
+                        className="px-2.5 py-1 rounded-lg bg-hive-surface hover:border-hive-lime/50 text-[11px] border border-hive-border text-hive-brightText transition-colors"
                       >
                         {ch.id === 0 ? "#agency-hq" : `@${ch.name}`}
                       </button>
@@ -233,14 +228,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
               {/* Bubble Bottom Bar: Time & Status */}
               <div
-                className={`flex items-center space-x-1.5 mt-1 select-none text-[10px] text-hive-dimText ${
+                className={`flex items-center space-x-2 mt-2 pt-1 border-t border-hive-border/50 select-none text-[10px] text-hive-dimText ${
                   isUser ? "justify-end" : "justify-between"
                 }`}
               >
                 {!isUser && (
                   <button
                     onClick={() => onPlayVoice(msg.content, msg.sender)}
-                    className="hover:text-hive-cyan transition-colors flex items-center gap-1"
+                    className="hover:text-hive-lime transition-colors flex items-center gap-1"
                     title={
                       isMuted
                         ? "Strict Mute Active: Unmute in header to play speech"
@@ -251,7 +246,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                     <span>TTS</span>
                   </button>
                 )}
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-1.5 font-mono">
                   {msg.is_edited && <span className="italic text-[9px]">(edited)</span>}
                   <span>{formatTime(msg.created_at)}</span>
                 </div>
@@ -259,13 +254,13 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
               {/* Hover Action Bar: Reply, React, Kaomoji, Forward, Edit, Delete */}
               <div
-                className={`absolute -top-3 hidden group-hover:flex items-center space-x-1 bg-hive-panel border border-hive-border px-1.5 py-0.5 rounded-full shadow-lg z-10 select-none ${
-                  isUser ? "right-2" : "left-2"
+                className={`absolute -top-3.5 hidden group-hover:flex items-center space-x-1 bg-hive-panel border border-hive-border px-2 py-1 rounded-full shadow-xl z-10 select-none ${
+                  isUser ? "right-3" : "left-3"
                 }`}
               >
                 <button
                   onClick={() => onReply(msg)}
-                  className="p-1 hover:text-hive-cyan text-hive-dimText transition-colors"
+                  className="p-1 hover:text-hive-lime text-hive-dimText transition-colors"
                   title="Reply"
                 >
                   <M3Icon name="reply" size={14} />
@@ -286,14 +281,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                 </button>
                 <button
                   onClick={() => onReact(msg.id, "(ง'̀-'́)ง")}
-                  className="px-1 text-[10px] font-mono hover:text-hive-cyan text-hive-dimText transition-colors"
+                  className="px-1 text-[10px] font-mono hover:text-hive-lime text-hive-dimText transition-colors"
                   title="React (ง'̀-'́)ง"
                 >
                   (ง'̀-'́)ง
                 </button>
                 <button
                   onClick={() => setForwardingId(forwardingId === msg.id ? null : msg.id)}
-                  className="p-1 hover:text-hive-cyan text-hive-dimText transition-colors"
+                  className="p-1 hover:text-hive-lime text-hive-dimText transition-colors"
                   title="Forward Message"
                 >
                   <M3Icon name="forward" size={14} />
@@ -305,14 +300,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                         setEditingId(msg.id);
                         setEditText(msg.content);
                       }}
-                      className="p-1 hover:text-hive-cyan text-hive-dimText transition-colors"
+                      className="p-1 hover:text-hive-lime text-hive-dimText transition-colors"
                       title="Edit Message"
                     >
                       <M3Icon name="edit" size={14} />
                     </button>
                     <button
                       onClick={() => onDelete(msg.id)}
-                      className="p-1 hover:text-red-400 text-hive-dimText transition-colors"
+                      className="p-1 hover:text-hive-brightText text-hive-dimText transition-colors"
                       title="Delete Message"
                     >
                       <M3Icon name="delete" size={14} />
@@ -327,14 +322,15 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
       {/* Live Agent Typing & Activity Indicator */}
       {typingIndicator && (
-        <div className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-hive-surface/70 border border-hive-cyan/30 w-fit animate-pulse select-none">
+        <div className="flex items-center space-x-2.5 px-4 py-2.5 rounded-xl bg-hive-surface border border-hive-lime/30 w-fit animate-pulse select-none">
           <span className="w-2 h-2 rounded-full bg-hive-lime" />
-          <span className="text-xs font-semibold text-hive-cyan">@{typingIndicator.agent}</span>
+          <span className="text-xs font-semibold text-hive-lime">@{typingIndicator.agent}</span>
           <span className="text-xs text-hive-dimText">{typingIndicator.activity}</span>
         </div>
       )}
 
       <div ref={bottomRef} />
+      </div>
     </div>
   );
 };

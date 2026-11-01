@@ -60,89 +60,91 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   };
 
   return (
-    <div className="w-80 bg-hive-panel border-r border-hive-border flex flex-col h-full select-none">
+    <div className="w-[340px] bg-hive-panel border-r border-hive-border flex flex-col h-full select-none flex-shrink-0">
       {/* Header & Instant Search Bar */}
-      <div className="p-3 border-b border-hive-border flex flex-col space-y-2">
+      <div className="px-4 py-4 border-b border-hive-border flex flex-col space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold tracking-wide text-hive-brightText uppercase flex items-center gap-1.5">
-            <M3Icon name="hexagon" filled size={15} className="text-hive-cyan" /> Chats
+          <h2 className="text-sm font-semibold tracking-wider text-hive-brightText uppercase flex items-center gap-2">
+            <M3Icon name="hexagon" filled size={16} className="text-hive-lime" /> H.I.V.E. Channels
           </h2>
-          <span className="text-xs text-hive-dimText font-mono">13 channels</span>
+          <span className="text-[11px] text-hive-dimText font-mono bg-hive-surface px-2 py-0.5 rounded-md border border-hive-border">
+            13 lines
+          </span>
         </div>
 
         {/* Search Input (Ctrl+K trigger) */}
         <div
           onClick={onOpenSearch}
-          className="flex items-center px-2.5 py-1.5 rounded bg-hive-surface border border-hive-border hover:border-hive-cyan/50 text-hive-dimText cursor-pointer transition-colors text-xs space-x-2"
+          className="flex items-center px-3 py-2 rounded-xl bg-hive-surface border border-hive-border hover:border-hive-lime/40 text-hive-dimText cursor-pointer transition-all text-xs space-x-2.5"
         >
-          <M3Icon name="search" size={15} className="text-hive-cyan" />
+          <M3Icon name="search" size={16} className="text-hive-lime flex-shrink-0" />
           <input
             type="text"
-            placeholder="Search messages & memories (Ctrl+K)..."
+            placeholder="Search messages & memory..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onClick={(e) => e.stopPropagation()}
             className="bg-transparent border-none outline-none text-hive-brightText placeholder-hive-dimText w-full text-xs"
           />
-          <kbd className="text-[10px] bg-hive-base px-1.5 py-0.5 rounded border border-hive-border text-hive-dimText font-mono">
+          <kbd className="text-[10px] bg-hive-base px-1.5 py-0.5 rounded border border-hive-border text-hive-dimText font-mono flex-shrink-0">
             Ctrl+K
           </kbd>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex space-x-1.5 pt-1">
+        {/* Segmented Filter Pills */}
+        <div className="grid grid-cols-2 gap-1.5 p-1 bg-hive-base rounded-xl border border-hive-border">
           <button
             onClick={() => setFilter("all")}
-            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${
+            className={`py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
               filter === "all"
-                ? "bg-hive-surface text-hive-cyan border border-hive-cyan/30"
+                ? "bg-hive-surface text-hive-lime border border-hive-lime/30"
                 : "text-hive-dimText hover:text-hive-brightText"
             }`}
           >
-            <M3Icon name="chat" size={13} /> All Lines
+            <M3Icon name="chat" size={14} filled={filter === "all"} /> All Lines
           </button>
           <button
             onClick={() => setFilter("tasks")}
-            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${
+            className={`py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
               filter === "tasks"
                 ? "bg-hive-surface text-hive-lime border border-hive-lime/30"
                 : "text-hive-dimText hover:text-hive-brightText"
             }`}
           >
-            <M3Icon name="checklist" size={14} /> 5m Tasks ({tasks.length})
+            <M3Icon name="checklist" size={15} filled={filter === "tasks"} /> 5m Tasks ({tasks.length})
           </button>
         </div>
       </div>
 
       {/* Stream: Either 5-Minute Tasks View or Conversations Stream */}
       {filter === "tasks" ? (
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+        <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-2.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-[10px] uppercase tracking-wider font-semibold text-hive-dimText">
               ADHD 5-Minute Task Queue
             </span>
             <button
               onClick={() => setShowNewTaskForm(!showNewTaskForm)}
-              className="text-[11px] text-hive-lime hover:underline flex items-center gap-0.5"
+              className="text-[11px] text-hive-lime hover:underline flex items-center gap-1 font-medium"
             >
               <M3Icon name="add_task" size={14} /> New 5m Task
             </button>
           </div>
 
           {showNewTaskForm && (
-            <div className="p-2.5 rounded-lg bg-hive-surface border border-hive-lime/40 space-y-2 text-xs">
+            <div className="p-3 rounded-xl bg-hive-surface border border-hive-lime/40 space-y-2.5 text-xs">
               <input
                 type="text"
                 placeholder="Task title (chunked into 5m steps)..."
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
-                className="w-full bg-hive-base border border-hive-border rounded px-2 py-1 text-hive-brightText outline-none"
+                className="w-full bg-hive-base border border-hive-border rounded-lg px-2.5 py-1.5 text-hive-brightText outline-none focus:border-hive-lime/50"
               />
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <select
                   value={newTaskAssignee}
                   onChange={(e) => setNewTaskAssignee(e.target.value)}
-                  className="bg-hive-base border border-hive-border rounded px-2 py-1 text-hive-cyan text-[11px]"
+                  className="bg-hive-base border border-hive-border rounded-lg px-2.5 py-1.5 text-hive-lime text-[11px] font-mono outline-none"
                 >
                   {agents.map((a) => (
                     <option key={a.codename} value={a.codename}>
@@ -152,9 +154,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 </select>
                 <button
                   onClick={handleAddTask}
-                  className="px-2.5 py-1 rounded bg-hive-lime text-hive-base font-semibold text-[11px]"
+                  className="px-3 py-1.5 rounded-lg bg-hive-lime text-hive-base font-semibold text-[11px] hover:opacity-90 transition-opacity"
                 >
-                  Create
+                  Create Task
                 </button>
               </div>
             </div>
@@ -165,45 +167,45 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           ))}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto divide-y divide-hive-border/40">
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
           {/* Pinned Section: #agency-hq */}
           {hqChannel && (
-            <div className="p-1.5 bg-hive-base/30">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-hive-dimText px-2 py-1 flex items-center gap-1">
-                <M3Icon name="keep" filled size={12} className="text-hive-lime" /> Pinned
+            <div className="space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-hive-dimText px-2 flex items-center gap-1.5">
+                <M3Icon name="keep" filled size={12} className="text-hive-lime" /> Pinned Town Square
               </div>
               <div
                 onClick={() => onSelectChannel(0)}
-                className={`p-2.5 rounded-lg cursor-pointer transition-all flex items-start space-x-3 relative ${
+                className={`p-3 rounded-xl cursor-pointer transition-all flex items-start space-x-3 relative border ${
                   activeChannelId === 0
-                    ? "bg-hive-surface border border-hive-cyan/40 shadow-sm"
-                    : "hover:bg-hive-surface/60"
+                    ? "bg-hive-surface border-hive-lime/40"
+                    : "bg-hive-base/40 border-hive-border hover:bg-hive-surface/70"
                 }`}
               >
-                <div className="w-10 h-10 rounded-lg bg-hive-surface border border-hive-lime/40 flex items-center justify-center text-hive-lime font-bold text-lg flex-shrink-0">
+                {activeChannelId === 0 && (
+                  <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r bg-hive-lime" />
+                )}
+                <div className="w-10 h-10 rounded-xl bg-hive-base border border-hive-lime/40 flex items-center justify-center text-hive-lime font-bold text-lg flex-shrink-0">
                   <M3Icon name="hub" filled size={20} />
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm text-hive-brightText flex items-center gap-1 truncate">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-[13px] text-hive-brightText flex items-center gap-1 truncate">
                       #agency-hq
                     </span>
-                    <span className="text-[10px] text-hive-dimText font-mono">
-                      {latestMessages[0] ? formatTime(latestMessages[0].created_at) : "Active"}
+                    <span className="text-[10px] text-hive-dimText font-mono flex-shrink-0">
+                      {latestMessages[0] ? formatTime(latestMessages[0].created_at) : "LIVE"}
                     </span>
                   </div>
-                  <p className="text-xs text-hive-dimText truncate mt-0.5">
+                  <p className="text-xs text-hive-dimText truncate mt-1">
                     {latestMessages[0]?.content
                       ? stripMarkdown(latestMessages[0].content)
                       : "Primary Agency Town Square"}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    <span className="text-[10px] bg-hive-base text-hive-lime border border-hive-lime/30 px-1.5 py-0.2 rounded font-mono">
-                      12 Agents
-                    </span>
-                    <span className="text-[10px] text-hive-cyan truncate">
-                      Collective Town Square
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-[10px] bg-hive-base text-hive-lime border border-hive-lime/30 px-2 py-0.5 rounded-md font-mono">
+                      12 Agents Online
                     </span>
                   </div>
                 </div>
@@ -212,55 +214,45 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           )}
 
           {/* 12 Permanent Agent DMs */}
-          <div className="p-1.5">
-            <div className="text-[10px] uppercase tracking-wider font-semibold text-hive-dimText px-2 py-1.5 flex items-center justify-between">
-              <span>Direct Messages</span>
-              <span className="text-hive-cyan font-mono">12 Permanent</span>
+          <div className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-wider font-semibold text-hive-dimText px-2 flex items-center justify-between">
+              <span>Direct Agent Lines</span>
+              <span className="text-hive-lime font-mono">12 Permanent</span>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {filteredDms.map((channel) => {
                 const agent = getAgentForChannel(channel);
                 const isActive = activeChannelId === channel.id;
                 const lastMsg = latestMessages[channel.id];
 
-                let avatarColor = "#42CFC4";
-                if (agent?.avatar_config) {
-                  try {
-                    const cfg = JSON.parse(agent.avatar_config);
-                    avatarColor = cfg.primary_color || avatarColor;
-                  } catch {
-                    // ignore
-                  }
-                }
-
                 return (
                   <div
                     key={channel.id}
                     onClick={() => onSelectChannel(channel.id)}
-                    className={`p-2 rounded-lg cursor-pointer transition-all flex items-start space-x-2.5 relative ${
+                    className={`px-3 py-2.5 rounded-xl cursor-pointer transition-all flex items-start space-x-3 relative border ${
                       isActive
-                        ? "bg-hive-surface border border-hive-cyan/40 shadow-sm"
-                        : "hover:bg-hive-surface/60"
+                        ? "bg-hive-surface border-hive-lime/40"
+                        : "border-transparent hover:bg-hive-surface/70 hover:border-hive-border"
                     }`}
                   >
-                    <div className="relative flex-shrink-0">
+                    {isActive && (
+                      <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r bg-hive-lime" />
+                    )}
+                    <div className="relative flex-shrink-0 mt-0.5">
                       <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs border"
-                        style={{
-                          backgroundColor: `${avatarColor}15`,
-                          borderColor: `${avatarColor}40`,
-                          color: avatarColor,
-                        }}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs border transition-colors ${
+                          isActive
+                            ? "bg-hive-lime/15 border-hive-lime/50 text-hive-lime"
+                            : "bg-hive-surface border-hive-border text-hive-brightText"
+                        }`}
                       >
                         {channel.name.slice(0, 2).toUpperCase()}
                       </div>
                       <span
-                        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-hive-panel ${
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-hive-panel ${
                           agent?.status === "thinking"
-                            ? "bg-yellow-400 animate-pulse"
-                            : agent?.status === "busy"
-                            ? "bg-red-400"
+                            ? "bg-hive-lime animate-pulse"
                             : "bg-hive-lime"
                         }`}
                         title={`Status: ${agent?.status || "available"}`}
@@ -268,24 +260,24 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-xs text-hive-brightText truncate flex items-center gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-xs text-hive-brightText truncate flex items-center gap-1.5">
                           {channel.name}
-                          <span className="text-[10px] text-hive-dimText font-normal">
+                          <span className="text-[10px] text-hive-dimText font-mono font-normal">
                             @{channel.agent_codename}
                           </span>
                         </span>
-                        <span className="text-[10px] text-hive-dimText font-mono">
+                        <span className="text-[10px] text-hive-dimText font-mono flex-shrink-0">
                           {lastMsg ? formatTime(lastMsg.created_at) : ""}
                         </span>
                       </div>
 
-                      <p className="text-[11px] text-hive-cyan truncate mt-0.5">
+                      <p className="text-[11px] text-hive-lime/90 truncate mt-0.5 font-medium">
                         {agent?.role || channel.description}
                       </p>
 
                       <p className="text-xs text-hive-dimText truncate mt-0.5">
-                        {lastMsg ? stripMarkdown(lastMsg.content) : "Click to direct message..."}
+                        {lastMsg ? stripMarkdown(lastMsg.content) : "Direct specialist line ready"}
                       </p>
                     </div>
                   </div>

@@ -9,19 +9,20 @@ export default {
     extend: {
       colors: {
         hive: {
-          base: "#0B0F14",
-          panel: "#121820",
-          surface: "#18222D",
-          surfaceHover: "#1E2A38",
-          outgoing: "#16332E",
-          outgoingBorder: "#204D45",
-          incoming: "#18222D",
-          border: "#212E3D",
-          cyan: "#42CFC4",
+          base: "#000000",
+          panel: "#060606",
+          surface: "#0D0D0D",
+          surfaceHover: "#151515",
+          outgoing: "#0B1606",
+          outgoingBorder: "#1D3612",
+          incoming: "#0A0A0A",
+          border: "#1A1A1A",
+          accent: "#85D94B",
+          cyan: "#85D94B",
           lime: "#85D94B",
-          dimText: "#7E8F9F",
-          brightText: "#E0E8F0",
-          highlight: "#2A3C4E"
+          dimText: "#7A7A7A",
+          brightText: "#F2F2F2",
+          highlight: "#171717"
         }
       },
       fontFamily: {

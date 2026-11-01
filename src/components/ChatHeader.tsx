@@ -21,64 +21,47 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onToggleFocusMode,
   onOpenSearch,
 }) => {
-  let avatarColor = "#42CFC4";
-  if (agent?.avatar_config) {
-    try {
-      const cfg = JSON.parse(agent.avatar_config);
-      avatarColor = cfg.primary_color || avatarColor;
-    } catch {
-      // ignore
-    }
-  }
-
   return (
-    <header className="h-14 bg-hive-panel border-b border-hive-border px-4 flex items-center justify-between select-none">
+    <header className="h-16 bg-hive-panel border-b border-hive-border px-6 flex items-center justify-between select-none flex-shrink-0">
       {/* Left: Channel / Agent Identity */}
-      <div className="flex items-center space-x-3 min-w-0">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border flex-shrink-0"
-          style={{
-            backgroundColor: `${avatarColor}15`,
-            borderColor: `${avatarColor}40`,
-            color: avatarColor,
-          }}
-        >
+      <div className="flex items-center space-x-3.5 min-w-0">
+        <div className="w-10 h-10 rounded-xl bg-hive-surface border border-hive-lime/40 text-hive-lime flex items-center justify-center font-bold text-xs flex-shrink-0">
           {channel.id === 0 ? (
-            <M3Icon name="hub" filled size={17} />
+            <M3Icon name="hub" filled size={20} />
           ) : (
             channel.name.slice(0, 2).toUpperCase()
           )}
         </div>
 
-        <div className="min-w-0">
-          <div className="flex items-center space-x-2">
-            <h1 className="text-sm font-semibold text-hive-brightText truncate">
+        <div className="min-w-0 space-y-0.5">
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-[15px] font-semibold text-hive-brightText truncate">
               {channel.id === 0 ? "#agency-hq" : channel.name}
             </h1>
             {channel.id === 0 ? (
-              <span className="text-[10px] bg-hive-base text-hive-lime border border-hive-lime/30 px-1.5 py-0.2 rounded font-mono">
-                12 Agents
+              <span className="text-[10px] bg-hive-base text-hive-lime border border-hive-lime/30 px-2 py-0.5 rounded-md font-mono">
+                12 Agents Active
               </span>
             ) : (
-              <span className="text-[10px] bg-hive-surface text-hive-cyan border border-hive-border px-1.5 py-0.2 rounded font-mono">
+              <span className="text-[10px] bg-hive-surface text-hive-lime border border-hive-border px-2 py-0.5 rounded-md font-mono">
                 {agent?.role}
               </span>
             )}
           </div>
           <p className="text-xs text-hive-dimText truncate">
             {channel.id === 0
-              ? "Primary Agency Town Square — Transparent Multi-Agent Collaboration"
+              ? "Primary Agency Town Square — Autonomous 24/7 Multi-Agent Collaboration"
               : `Direct line to ${agent?.display_name} • ${agent?.model_tier}`}
           </p>
         </div>
       </div>
 
       {/* Right: Quick Action Controls */}
-      <div className="flex items-center space-x-1.5">
+      <div className="flex items-center space-x-2">
         {/* Search within conversation */}
         <button
           onClick={onOpenSearch}
-          className="p-1.5 rounded hover:bg-hive-surface text-hive-dimText hover:text-hive-brightText transition-colors"
+          className="w-9 h-9 rounded-xl border border-hive-border bg-hive-surface hover:border-hive-lime/40 text-hive-dimText hover:text-hive-brightText transition-all flex items-center justify-center"
           title="Search messages (Ctrl+K)"
           aria-label="Search"
         >
@@ -88,10 +71,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         {/* Audio Mute Toggle Button */}
         <button
           onClick={onToggleMute}
-          className={`p-1.5 rounded transition-colors ${
+          className={`w-9 h-9 rounded-xl border transition-all flex items-center justify-center ${
             isMuted
-              ? "text-hive-dimText hover:text-hive-brightText hover:bg-hive-surface"
-              : "text-hive-lime bg-hive-lime/10 hover:bg-hive-lime/20"
+              ? "border-hive-border bg-hive-surface text-hive-dimText hover:text-hive-brightText"
+              : "border-hive-lime/50 bg-hive-lime/15 text-hive-lime"
           }`}
           title={isMuted ? "Audio Muted (Strict Invariant)" : "Speech Enabled (Click to Mute)"}
           aria-label="Toggle Audio Mute"
@@ -102,10 +85,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         {/* Focus Mode Toggle (Ctrl+F11) */}
         <button
           onClick={onToggleFocusMode}
-          className={`p-1.5 rounded transition-colors ${
+          className={`w-9 h-9 rounded-xl border transition-all flex items-center justify-center ${
             isFocusMode
-              ? "text-hive-cyan bg-hive-cyan/10 hover:bg-hive-cyan/20"
-              : "text-hive-dimText hover:text-hive-brightText hover:bg-hive-surface"
+              ? "border-hive-lime/50 bg-hive-lime/15 text-hive-lime"
+              : "border-hive-border bg-hive-surface text-hive-dimText hover:text-hive-brightText"
           }`}
           title="Focus Mode (Ctrl+F11)"
           aria-label="Focus Mode"

@@ -17,53 +17,61 @@ export const NavRail: React.FC<NavRailProps> = ({
   onToggleMute,
 }) => {
   return (
-    <aside className="w-12 bg-hive-panel border-r border-hive-border flex flex-col items-center justify-between py-3 select-none z-20">
+    <aside className="w-14 bg-hive-base border-r border-hive-border flex flex-col items-center justify-between py-4 select-none z-20 flex-shrink-0">
       {/* Top Branding & Main Navigation */}
-      <div className="flex flex-col items-center space-y-4">
+      <div className="flex flex-col items-center space-y-3.5 w-full">
         {/* Borg Hexagon Logo */}
         <div
-          className="w-8 h-8 rounded bg-hive-surface border border-hive-cyan/30 flex items-center justify-center text-hive-cyan shadow-inner cursor-pointer"
+          className="w-10 h-10 rounded-xl bg-hive-surface border border-hive-lime/30 flex items-center justify-center text-hive-lime cursor-pointer transition-all hover:border-hive-lime/60"
           title="H.I.V.E. Autonomous Agency"
         >
-          <M3Icon name="hexagon" filled size={18} />
+          <M3Icon name="hexagon" filled size={20} />
         </div>
+
+        <div className="w-6 h-px bg-hive-border my-1" />
 
         {/* Chats Tab */}
         <button
           onClick={() => onSelectTab("chats")}
-          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors relative ${
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${
             currentTab === "chats"
-              ? "bg-hive-surface text-hive-cyan border border-hive-cyan/40"
-              : "text-hive-dimText hover:text-hive-brightText hover:bg-hive-surface/60"
+              ? "bg-hive-surface text-hive-lime border border-hive-lime/40"
+              : "text-hive-dimText hover:text-hive-brightText hover:bg-hive-surface"
           }`}
           title="Chats & Direct Lines"
           aria-label="Chats"
         >
-          <M3Icon name="forum" filled={currentTab === "chats"} size={19} />
-          <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-hive-lime" />
+          {currentTab === "chats" && (
+            <span className="absolute -left-2 w-1 h-5 rounded-r bg-hive-lime" />
+          )}
+          <M3Icon name="forum" filled={currentTab === "chats"} size={20} />
+          <span className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-hive-lime" />
         </button>
 
         {/* Settings & Constitution Tab */}
         <button
           onClick={() => onSelectTab("settings")}
-          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${
             currentTab === "settings"
-              ? "bg-hive-surface text-hive-cyan border border-hive-cyan/40"
-              : "text-hive-dimText hover:text-hive-brightText hover:bg-hive-surface/60"
+              ? "bg-hive-surface text-hive-lime border border-hive-lime/40"
+              : "text-hive-dimText hover:text-hive-brightText hover:bg-hive-surface"
           }`}
           title="Agency Settings & Constitution"
           aria-label="Settings"
         >
-          <M3Icon name="tune" filled={currentTab === "settings"} size={19} />
+          {currentTab === "settings" && (
+            <span className="absolute -left-2 w-1 h-5 rounded-r bg-hive-lime" />
+          )}
+          <M3Icon name="tune" filled={currentTab === "settings"} size={20} />
         </button>
       </div>
 
       {/* Bottom Indicators & Audio Sovereign Switch */}
-      <div className="flex flex-col items-center space-y-3">
+      <div className="flex flex-col items-center space-y-4">
         {/* Audio Mute Sovereign Switch (Strict Invariant) */}
         <button
           onClick={onToggleMute}
-          className={`w-8 h-8 rounded flex items-center justify-center transition-colors border ${
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${
             isMuted
               ? "bg-hive-surface text-hive-dimText border-hive-border hover:text-hive-brightText"
               : "bg-hive-surface text-hive-lime border-hive-lime/50"
@@ -71,21 +79,19 @@ export const NavRail: React.FC<NavRailProps> = ({
           title={isMuted ? "Audio Strictly Muted (Default)" : "Audio Speech Enabled"}
           aria-label="Audio Mute"
         >
-          <M3Icon name={isMuted ? "volume_off" : "volume_up"} filled={!isMuted} size={17} />
+          <M3Icon name={isMuted ? "volume_off" : "volume_up"} filled={!isMuted} size={19} />
         </button>
 
         {/* 24/7 Agency Operational State Dot */}
         <div
-          className="relative cursor-pointer group"
+          className="w-8 h-8 rounded-lg bg-hive-surface border border-hive-border flex items-center justify-center cursor-pointer"
           title={`Agency State: ${agencyState.toUpperCase()}`}
         >
           <div
             className={`w-2.5 h-2.5 rounded-full transition-colors ${
               agencyState === "running"
                 ? "bg-hive-lime animate-pulse"
-                : agencyState === "paused"
-                ? "bg-yellow-500"
-                : "bg-red-500"
+                : "bg-hive-dimText"
             }`}
           />
         </div>

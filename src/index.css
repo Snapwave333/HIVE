@@ -4,39 +4,40 @@
 
 @layer base {
   :root {
-    --bg-base: #0B0F14;
-    --bg-panel: #121820;
-    --bg-surface: #18222D;
-    --bg-surface-hover: #1E2A38;
-    --bg-outgoing: #16332E;
-    --accent-cyan: #42CFC4;
+    --bg-base: #000000;
+    --bg-panel: #060606;
+    --bg-surface: #0D0D0D;
+    --bg-surface-hover: #151515;
+    --bg-outgoing: #0B1606;
+    --accent-cyan: #85D94B;
     --accent-lime: #85D94B;
-    --border-hairline: #212E3D;
+    --border-hairline: #1A1A1A;
   }
 
   body {
     background-color: var(--bg-base);
-    color: #E0E8F0;
+    color: #F2F2F2;
     user-select: none;
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
   }
 }
 
-/* Custom minimal WhatsApp scrollbar */
+/* Custom minimal black & single-accent scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #000000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #212E3D;
-  border-radius: 3px;
+  background: #1F1F1F;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #42CFC4;
+  background: #85D94B;
 }

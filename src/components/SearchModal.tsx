@@ -153,16 +153,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
               {results.memories?.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-hive-dimText flex items-center gap-1">
-                    <M3Icon name="psychology" size={14} className="text-purple-400" /> Agency Memories
+                    <M3Icon name="psychology" size={14} className="text-hive-lime" /> Agency Memories
                   </span>
                   <div className="space-y-1">
                     {results.memories.map((mem) => (
                       <div
                         key={mem.id}
-                        className="p-2 rounded bg-hive-surface border border-hive-border"
+                        className="p-2.5 rounded-lg bg-hive-surface border border-hive-border"
                       >
-                        <div className="flex items-center space-x-1.5 mb-0.5">
-                          <span className="text-[10px] font-mono uppercase bg-hive-base text-purple-400 px-1 rounded">
+                        <div className="flex items-center space-x-1.5 mb-1">
+                          <span className="text-[10px] font-mono uppercase bg-hive-base text-hive-lime border border-hive-lime/30 px-1.5 py-0.5 rounded">
                             {mem.category}
                           </span>
                           <span className="text-[10px] text-hive-dimText font-mono">
