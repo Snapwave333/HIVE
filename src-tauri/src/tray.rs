@@ -6,7 +6,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let open_item = MenuItemBuilder::with_id("open", "Open H.I.V.E.").build(app)?;
     let pause_item = MenuItemBuilder::with_id("pause", "Pause Agency").build(app)?;
     let resume_item = MenuItemBuilder::with_id("resume", "Resume Agency").build(app)?;
-    let mute_item = MenuItemBuilder::with_id("toggle_mute", "Toggle Audio Mute (Strict: Muted)").build(app)?;
+    let mute_item = MenuItemBuilder::with_id("toggle_mute", "Mute / unmute speech").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Stop & Quit").build(app)?;
 
     let menu = MenuBuilder::new(app)
@@ -20,8 +20,14 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
-    let _tray = TrayIconBuilder::new()
-        .tooltip("H.I.V.E. Autonomous Agency")
+    let mut builder = TrayIconBuilder::with_id("hive-tray");
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    } else {
+        log::warn!("No app icon available for the tray");
+    }
+    let _tray = builder
+        .tooltip("H.I.V.E. (click to open)")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| {
