@@ -74,18 +74,81 @@ impl AppState {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(600)).await;
 
-            let (agent_code, role, reply) = if channel_id == 0 {
+            let lower = user_msg.to_lowercase();
+            let (agent_code, role, reply): (String, String, String) = if lower.starts_with("/gog")
+                || lower.contains("google")
+                || lower.contains("calendar")
+                || lower.contains("drive")
+                || lower.contains("@link")
+            {
+                let link_role = "Integration / Tools".to_string();
+                if lower.starts_with("/gog ") {
+                    let cmd_str = user_msg.trim_start_matches("/gog ").trim();
+                    let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+                    match bridges::EcosystemBridges::gog_cli_exec(&parts) {
+                        Ok(res) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⬡ **Google CLI (`gog`) Executed**\n```json\n{}\n```", res.trim()),
+                        ),
+                        Err(e) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⚠ **Google CLI Execution Error**: {}", e),
+                        ),
+                    }
+                } else if lower.contains("calendar") {
+                    match bridges::EcosystemBridges::gog_query("calendar", &["calendars", "--json", "--results-only"]) {
+                        Ok(res) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⬡ **Google Calendar Bridge Sync** (`elikenny333@gmail.com`)\n\nConnected to local `gog` CLI. Active calendars:\n```json\n{}\n```", res.trim()),
+                        ),
+                        Err(e) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⚠ **Google Calendar Sync Error**: {}", e),
+                        ),
+                    }
+                } else if lower.contains("drive") {
+                    match bridges::EcosystemBridges::gog_query("drive", &["search", "''", "--max", "4", "--json", "--results-only"]) {
+                        Ok(res) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⬡ **Google Drive Bridge Sync** (`elikenny333@gmail.com`)\n\nQueried files via `gog` CLI:\n```json\n{}\n```", res.trim()),
+                        ),
+                        Err(e) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⚠ **Google Drive Query Error**: {}", e),
+                        ),
+                    }
+                } else {
+                    match bridges::EcosystemBridges::check_google_auth() {
+                        Ok(res) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⬡ **Google Ecosystem Status**\n\n`gog` CLI authenticated session verified:\n```text\n{}\n```\nAll Google services (Drive, Calendar, Gmail, Tasks, Docs, Sheets) are active and available.", res.trim()),
+                        ),
+                        Err(e) => (
+                            "LINK".to_string(),
+                            link_role,
+                            format!("⚠ **Google Bridge Error**: {}", e),
+                        ),
+                    }
+                }
+            } else if channel_id == 0 {
                 // Group chat: check mentions or determine lead agent
                 if user_msg.to_lowercase().contains("@sage") {
-                    ("SAGE", "Research & Analysis", "Data synthesis initiated. Cross-referencing findings across indexed memory archives.")
+                    ("SAGE".to_string(), "Research & Analysis".to_string(), "Data synthesis initiated. Cross-referencing findings across indexed memory archives.".to_string())
                 } else if user_msg.to_lowercase().contains("@forge") {
-                    ("FORGE", "Engineering / Build", "Architecture and build pipeline ready. Commencing modular code synthesis.")
+                    ("FORGE".to_string(), "Engineering / Build".to_string(), "Architecture and build pipeline ready. Commencing modular code synthesis.".to_string())
                 } else if user_msg.to_lowercase().contains("@sentinel") {
-                    ("SENTINEL", "Security & Audit", "Threat model analysis active. Zero permission violations detected.")
+                    ("SENTINEL".to_string(), "Security & Audit".to_string(), "Threat model analysis active. Zero permission violations detected.".to_string())
                 } else if user_msg.to_lowercase().contains("@conductor") {
-                    ("CONDUCTOR", "Operations / Queue", "Task queue optimized. Breaking down workload into 5-minute action chunks.")
+                    ("CONDUCTOR".to_string(), "Operations / Queue".to_string(), "Task queue optimized. Breaking down workload into 5-minute action chunks.".to_string())
                 } else {
-                    ("PRIME", "Command / Strategy", "Directive acknowledged. All 12 agency sectors synchronized. Coordinating execution across permanent agents.")
+                    ("PRIME".to_string(), "Command / Strategy".to_string(), "Directive acknowledged. All 12 agency sectors synchronized. Coordinating execution across permanent agents.".to_string())
                 }
             } else {
                 // Direct Message: find which agent owns this channel
@@ -114,11 +177,9 @@ impl AppState {
                         "SPARK" => "Prototype experiment evaluated. Exploring innovative algorithmic vectors.",
                         _ => "Acknowledged. Proceeding with specialized task execution.",
                     };
-                    let static_code = Box::leak(agent.codename.into_boxed_str());
-                    let static_role = Box::leak(agent.role.into_boxed_str());
-                    (static_code as &str, static_role as &str, text)
+                    (agent.codename, agent.role, text.to_string())
                 } else {
-                    ("PRIME", "Command / Strategy", "Directive received. Ready to assist.")
+                    ("PRIME".to_string(), "Command / Strategy".to_string(), "Directive received. Ready to assist.".to_string())
                 }
             };
 
@@ -142,7 +203,7 @@ impl AppState {
             };
 
             let _ = db.insert_message(&msg);
-            events.emit_message(&msg_id, channel_id, agent_code, reply);
+            events.emit_message(&msg_id, channel_id, &agent_code, &reply);
         });
     }
 }

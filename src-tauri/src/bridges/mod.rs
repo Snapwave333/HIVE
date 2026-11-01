@@ -47,8 +47,14 @@ impl EcosystemBridges {
     }
 
     pub fn gog_query(service: &str, args: &[&str]) -> anyhow::Result<String> {
+        let mut cmd_args = vec![service];
+        cmd_args.extend_from_slice(args);
+        Self::gog_cli_exec(&cmd_args)
+    }
+
+    pub fn gog_cli_exec(args: &[&str]) -> anyhow::Result<String> {
         let gog_path = r"C:\Users\chrom\gog-wrapper\gog.bat";
-        let mut cmd_args = vec!["/C", gog_path, service];
+        let mut cmd_args = vec!["/C", gog_path];
         cmd_args.extend_from_slice(args);
 
         let output = Command::new("cmd")
