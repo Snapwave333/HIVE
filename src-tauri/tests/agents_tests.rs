@@ -298,3 +298,64 @@ fn attachments_are_described_and_text_excerpted_for_agents() {
     assert!(!agents::is_text_like("application/pdf", "doc.pdf"));
     assert!(db.save_attachment("bad.bin", "application/octet-stream", "%%%not-base64%%%").is_err());
 }
+
+#[test]
+fn full_text_search_stems_ranks_and_tracks_edits() {
+    let db = Database::new_in_memory().unwrap();
+    let a = msg("FORGE", "Deploying the new bundle now, snapshots look healthy");
+    let b = msg("SAGE", "Unrelated note about research papers");
+    let c = msg("GAUGE", "deploy deploy deploy: the deploy pipeline needs another deploy check");
+    for m in [&a, &b, &c] {
+        db.insert_message(m).unwrap();
+    }
+
+    let res = db.search("deploy").unwrap();
+    let ids: Vec<&str> = res["messages"].as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
+    assert_eq!(ids.len(), 2, "prefix matching finds Deploying and deploy but not the unrelated note");
+    assert_eq!(ids[0], c.id, "bm25 ranks the denser match first");
+
+    db.update_message(&b.id, "Now this one mentions deployment too").unwrap();
+    assert_eq!(db.search("deploy").unwrap()["messages"].as_array().unwrap().len(), 3, "edits are re-indexed");
+
+    db.delete_message(&a.id).unwrap();
+    let after = db.search("deploy").unwrap();
+    assert!(after["messages"].as_array().unwrap().iter().all(|m| m["id"] != a.id.as_str()), "deleted messages never show up");
+
+    let long = msg("VOICE", &format!("{} the needle is here {}", "filler ".repeat(200), "padding ".repeat(200)));
+    db.insert_message(&long).unwrap();
+    let hit = db.search("needle").unwrap();
+    let snippet = hit["messages"][0]["snippet"].as_str().unwrap();
+    assert!(snippet.contains("needle") && snippet.len() < 300, "long messages return an excerpt around the match");
+
+    assert!(db.search("research papers").unwrap()["messages"].as_array().unwrap().is_empty(), "the edited-away text is gone from the index");
+    assert_eq!(Database::fts_query("hi \" OR x"), Some("\"hi\"* \"OR\"* \"x\"*".to_string()), "user input can't inject FTS syntax");
+    assert_eq!(Database::fts_query("%%"), None);
+}
+
+#[test]
+#[ignore]
+fn search_benchmark_fts_vs_like() {
+    let db = Database::new_in_memory().unwrap();
+    let words = ["deploy", "snapshot", "agent", "memory", "calendar", "budget", "security", "research", "design", "queue"];
+    for i in 0..30_000 {
+        let body = format!(
+            "message {} about {} and {} with some extra words to make it realistic {}",
+            i,
+            words[i % words.len()],
+            words[(i * 7) % words.len()],
+            "lorem ".repeat(i % 20)
+        );
+        db.insert_message(&msg(if i % 2 == 0 { "FORGE" } else { "user" }, &body)).unwrap();
+    }
+    let t = std::time::Instant::now();
+    for _ in 0..50 {
+        db.search("snapshot budget").unwrap();
+    }
+    let fts = t.elapsed() / 50;
+    let t = std::time::Instant::now();
+    for _ in 0..50 {
+        db.search("%snapshot").unwrap();
+    }
+    let like = t.elapsed() / 50;
+    println!("30k messages: FTS {:?} per query, LIKE scan {:?} per query", fts, like);
+}

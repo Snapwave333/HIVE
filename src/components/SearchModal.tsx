@@ -112,7 +112,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center space-x-1.5">
-                            <span className="font-semibold text-hive-cyan text-[11px]">{m.sender}</span>
+                            <span className="font-semibold text-hive-cyan text-[11px]">{m.sender === "user" ? "You" : `@${m.sender}`}</span>
                             <span className="text-[10px] text-hive-dimText font-mono">
                               {channelLabel(m.channel_id)}
                             </span>

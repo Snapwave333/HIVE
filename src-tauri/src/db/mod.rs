@@ -71,6 +71,7 @@ impl Database {
 
         db.init_schema()?;
         db.apply_migrations()?;
+        db.rebuild_search_index_once()?;
         db.seed_defaults()?;
 
         if let Err(e) = db.create_backup() {
@@ -94,6 +95,7 @@ impl Database {
 
         db.init_schema()?;
         db.apply_migrations()?;
+        db.rebuild_search_index_once()?;
         db.seed_defaults()?;
 
         Ok(db)
@@ -309,6 +311,27 @@ impl Database {
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (2, 'V2__retire_fabricated_seed_data', ?1)",
             params![now],
+        )?;
+        Ok(())
+    }
+
+    fn rebuild_search_index_once(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let applied: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = 3",
+            [],
+            |r| r.get(0),
+        )?;
+        if applied > 0 {
+            return Ok(());
+        }
+        conn.execute_batch(
+            "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
+             INSERT INTO memories_fts(memories_fts) VALUES ('rebuild');",
+        )?;
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (3, 'V3__fts5_search_index', ?1)",
+            params![Utc::now().to_rfc3339()],
         )?;
         Ok(())
     }
@@ -1090,19 +1113,32 @@ impl Database {
         Ok(())
     }
 
-    // Unified Search across messages, tasks, memories
+    pub fn fts_query(query: &str) -> Option<String> {
+        let terms: Vec<String> = query
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|t| !t.is_empty())
+            .take(8)
+            .map(|t| format!("\"{}\"*", t))
+            .collect();
+        if terms.is_empty() {
+            None
+        } else {
+            Some(terms.join(" "))
+        }
+    }
+
     pub fn search(&self, query: &str) -> Result<serde_json::Value> {
         let conn = self.conn.lock().unwrap();
         let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         let pattern = format!("%{}%", escaped);
+        let fts = Self::fts_query(query);
+        let exact = query
+            .chars()
+            .any(|c| !c.is_alphanumeric() && !c.is_whitespace())
+            .then(|| pattern.clone());
 
-        // Messages
-        let mut msg_stmt = conn.prepare(
-            "SELECT id, channel_id, sender, content, created_at FROM messages
-             WHERE content LIKE ?1 ESCAPE '\\' AND is_deleted = 0
-             ORDER BY created_at DESC LIMIT 20",
-        )?;
-        let msg_rows = msg_stmt.query_map(params![pattern], |row| {
+        let mut messages = Vec::new();
+        let map_msg = |row: &rusqlite::Row| -> rusqlite::Result<serde_json::Value> {
             Ok(serde_json::json!({
                 "type": "message",
                 "id": row.get::<_, String>(0)?,
@@ -1111,13 +1147,30 @@ impl Database {
                 "snippet": row.get::<_, String>(3)?,
                 "created_at": row.get::<_, String>(4)?,
             }))
-        })?;
-        let mut messages = Vec::new();
-        for r in msg_rows {
-            messages.push(r?);
+        };
+        if let Some(fq) = fts.as_deref() {
+            let mut stmt = conn.prepare(
+                "SELECT m.id, m.channel_id, m.sender, snippet(messages_fts, 0, '', '', '…', 18), m.created_at
+                 FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid
+                 WHERE messages_fts MATCH ?1 AND m.is_deleted = 0
+                   AND (?2 IS NULL OR m.content LIKE ?2 ESCAPE '\\')
+                 ORDER BY bm25(messages_fts), m.created_at DESC
+                 LIMIT 20",
+            )?;
+            for r in stmt.query_map(params![fq, exact], map_msg)? {
+                messages.push(r?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT id, channel_id, sender, content, created_at FROM messages
+                 WHERE content LIKE ?1 ESCAPE '\\' AND is_deleted = 0
+                 ORDER BY created_at DESC LIMIT 20",
+            )?;
+            for r in stmt.query_map(params![pattern], map_msg)? {
+                messages.push(r?);
+            }
         }
 
-        // Tasks
         let mut task_stmt = conn.prepare(
             "SELECT id, title, assignee, status, created_at FROM tasks
              WHERE title LIKE ?1 ESCAPE '\\' OR description LIKE ?1 ESCAPE '\\'
@@ -1138,13 +1191,8 @@ impl Database {
             tasks.push(r?);
         }
 
-        // Memories
-        let mut mem_stmt = conn.prepare(
-            "SELECT id, category, content, provenance, created_at FROM memories
-             WHERE content LIKE ?1 ESCAPE '\\' OR tags LIKE ?1 ESCAPE '\\'
-             ORDER BY created_at DESC LIMIT 10",
-        )?;
-        let mem_rows = mem_stmt.query_map(params![pattern], |row| {
+        let mut memories = Vec::new();
+        let map_mem = |row: &rusqlite::Row| -> rusqlite::Result<serde_json::Value> {
             Ok(serde_json::json!({
                 "type": "memory",
                 "id": row.get::<_, String>(0)?,
@@ -1153,10 +1201,28 @@ impl Database {
                 "provenance": row.get::<_, String>(3)?,
                 "created_at": row.get::<_, String>(4)?,
             }))
-        })?;
-        let mut memories = Vec::new();
-        for r in mem_rows {
-            memories.push(r?);
+        };
+        if let Some(fq) = fts.as_deref() {
+            let mut stmt = conn.prepare(
+                "SELECT m.id, m.category, m.content, m.provenance, m.created_at
+                 FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid
+                 WHERE memories_fts MATCH ?1
+                   AND (?2 IS NULL OR m.content LIKE ?2 ESCAPE '\\' OR m.tags LIKE ?2 ESCAPE '\\')
+                 ORDER BY bm25(memories_fts), m.created_at DESC
+                 LIMIT 10",
+            )?;
+            for r in stmt.query_map(params![fq, exact], map_mem)? {
+                memories.push(r?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT id, category, content, provenance, created_at FROM memories
+                 WHERE content LIKE ?1 ESCAPE '\\' OR tags LIKE ?1 ESCAPE '\\'
+                 ORDER BY created_at DESC LIMIT 10",
+            )?;
+            for r in stmt.query_map(params![pattern], map_mem)? {
+                memories.push(r?);
+            }
         }
 
         Ok(serde_json::json!({
