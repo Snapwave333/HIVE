@@ -477,3 +477,24 @@ fn text_size_is_clamped_to_the_accessible_range() {
     assert_eq!(clamp_text_size(99.0), 20.0);
     assert_eq!(clamp_text_size(f64::NAN), BASE_TEXT_SIZE);
 }
+
+#[test]
+fn backup_retention_keeps_the_newest_dated_files_only() {
+    let dir = std::env::temp_dir().join(format!("hive-backups-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for day in 1..=20 {
+        std::fs::write(dir.join(format!("hive_2026-10-{:02}.db", day)), b"x").unwrap();
+    }
+    std::fs::write(dir.join("hive_manual-copy.db"), b"keep me").unwrap();
+    std::fs::write(dir.join("notes.txt"), b"keep me").unwrap();
+
+    let removed = Database::prune_backups(&dir, 14).unwrap();
+    assert_eq!(removed.len(), 6);
+    assert!(!dir.join("hive_2026-10-06.db").exists());
+    assert!(dir.join("hive_2026-10-07.db").exists());
+    assert!(dir.join("hive_2026-10-20.db").exists());
+    assert!(dir.join("hive_manual-copy.db").exists(), "files that aren't dated daily backups are never touched");
+    assert!(dir.join("notes.txt").exists());
+    assert!(Database::prune_backups(&dir, 14).unwrap().is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}

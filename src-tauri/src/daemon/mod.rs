@@ -182,9 +182,18 @@ impl DaemonManager {
             let mut turn_index: usize = 0;
             let mut consecutive_failures: u32 = 0;
             let mut step_failures: HashMap<String, u32> = HashMap::new();
-            let mut last_decay: Option<Instant> = None;
+            let mut last_maintenance: Option<Instant> = None;
 
             while this.is_running.load(Ordering::SeqCst) {
+                let _ = this.db.retire_expired_specialists();
+                if last_maintenance.map(|t| t.elapsed() > Duration::from_secs(3_600)).unwrap_or(true) {
+                    let _ = this.db.decay_relationships(RELATIONSHIP_HALF_LIFE_DAYS);
+                    if let Err(e) = this.db.create_backup() {
+                        log::warn!("Scheduled backup failed: {}", e);
+                    }
+                    last_maintenance = Some(Instant::now());
+                }
+
                 if this.is_paused.load(Ordering::SeqCst) || this.owner_has_the_floor() {
                     sleep(Duration::from_secs(3)).await;
                     continue;
@@ -193,13 +202,6 @@ impl DaemonManager {
                 if !EcosystemBridges::llm_configured() {
                     sleep(Duration::from_secs(60)).await;
                     continue;
-                }
-
-                let _ = this.db.retire_expired_specialists();
-
-                if last_decay.map(|t| t.elapsed() > Duration::from_secs(3_600)).unwrap_or(true) {
-                    let _ = this.db.decay_relationships(RELATIONSHIP_HALF_LIFE_DAYS);
-                    last_decay = Some(Instant::now());
                 }
 
                 let outcome = match this.run_task_step(&mut step_failures).await {

@@ -27,6 +27,8 @@ const AGENT_JSONS: &[(&str, &str)] = &[
     ("SPARK", include_str!("../../../agents/SPARK.json")),
 ];
 
+pub const BACKUP_RETENTION: usize = 14;
+
 #[derive(Clone)]
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -131,7 +133,36 @@ impl Database {
         if std::fs::metadata(&backup_file).map(|m| m.len()).unwrap_or(0) == 0 {
             anyhow::bail!("Backup file {:?} is missing or empty", backup_file);
         }
+        if let Err(e) = Self::prune_backups(&backup_dir, BACKUP_RETENTION) {
+            log::warn!("Backup pruning failed: {}", e);
+        }
         Ok(backup_file)
+    }
+
+    pub fn prune_backups(dir: &std::path::Path, keep: usize) -> Result<Vec<PathBuf>> {
+        let mut dated: Vec<PathBuf> = std::fs::read_dir(dir)?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| {
+                        n.len() == "hive_YYYY-MM-DD.db".len()
+                            && n.starts_with("hive_")
+                            && n.ends_with(".db")
+                            && chrono::NaiveDate::parse_from_str(&n[5..15], "%Y-%m-%d").is_ok()
+                    })
+                    .unwrap_or(false)
+            })
+            .collect();
+        dated.sort();
+        dated.reverse();
+        let mut removed = Vec::new();
+        for old in dated.into_iter().skip(keep) {
+            std::fs::remove_file(&old)?;
+            removed.push(old);
+        }
+        Ok(removed)
     }
 
     pub fn seed_defaults(&self) -> Result<()> {
