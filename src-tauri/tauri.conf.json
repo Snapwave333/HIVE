@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "H.I.V.E. — Agency Desktop",
+        "title": "H.I.V.E. \u2014 Agency Desktop",
         "width": 1920,
         "height": 1080,
         "minWidth": 800,
@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {

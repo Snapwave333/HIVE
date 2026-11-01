@@ -24,6 +24,35 @@ const markdownComponents: Components = {
   strong: ({ children }) => (
     <strong className="text-hive-brightText font-semibold">{children}</strong>
   ),
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      title={href}
+      onClick={(e) => {
+        e.preventDefault();
+        if (href) api.openExternal(href).catch((err) => console.warn("Link not opened:", err));
+      }}
+      className="text-hive-cyan underline decoration-hive-cyan/40 hover:decoration-hive-cyan cursor-pointer break-all"
+    >
+      {children}
+    </a>
+  ),
+  img: ({ src, alt }) =>
+    typeof src === "string" && src.startsWith("data:image/") ? (
+      <img src={src} alt={alt ?? ""} className="max-w-[320px] max-h-60 rounded-lg border border-hive-border" />
+    ) : (
+      <a
+        href={typeof src === "string" ? src : undefined}
+        onClick={(e) => {
+          e.preventDefault();
+          if (typeof src === "string") api.openExternal(src).catch((err) => console.warn("Link not opened:", err));
+        }}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-hive-base border border-hive-border text-[11px] text-hive-cyan cursor-pointer"
+        title={`Remote image not loaded: ${typeof src === "string" ? src : ""}`}
+      >
+        <M3Icon name="image" size={13} /> {alt || "image"} (open in browser)
+      </a>
+    ),
 };
 
 const remarkPlugins = [remarkGfm];

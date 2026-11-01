@@ -399,3 +399,23 @@ fn log_rotation_keeps_one_previous_file() {
     assert_eq!(std::fs::read(dir.join("hive.log.1")).unwrap()[0], b'z', "only the newest rotated log is kept");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn only_safe_external_links_can_be_opened() {
+    assert_eq!(agents::safe_external_url(" https://build.nvidia.com/models "), Some("https://build.nvidia.com/models".to_string()));
+    assert!(agents::safe_external_url("http://example.com/a?b=c").is_some());
+    assert!(agents::safe_external_url("mailto:owner@example.com").is_some());
+    for bad in [
+        "file:///C:/Windows/System32/calc.exe",
+        "javascript:alert(1)",
+        "C:\\Windows\\System32\\cmd.exe",
+        "https://",
+        "https:///etc/passwd",
+        "https://evil.com/\nrm -rf",
+        "https://exa mple.com",
+        "ms-settings:privacy",
+        "",
+    ] {
+        assert!(agents::safe_external_url(bad).is_none(), "should refuse {:?}", bad);
+    }
+}

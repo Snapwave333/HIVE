@@ -110,6 +110,7 @@ export const api = {
     ),
   getBridgeStatus: () => tauriInvoke<BridgeStatus>("get_bridge_status"),
   setNimApiKey: (key: string) => tauriInvoke<string>("set_nim_api_key", { key }),
+  openExternal: (url: string) => tauriInvoke<void>("open_external", { url }),
   executeGoogleQuery: (service: string, args: string[]) =>
     tauriInvoke<string>("execute_google_query", { service, args }),
   synthesizeVoice: (text: string, agentCodename: string) =>

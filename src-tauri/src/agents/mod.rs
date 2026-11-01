@@ -435,6 +435,17 @@ pub fn with_attachment_notes(db: &Database, history: &[Message]) -> Vec<Message>
 
 pub const NOTIFY_THROTTLE_SECS: u64 = 20;
 
+pub fn safe_external_url(raw: &str) -> Option<String> {
+    let url = raw.trim();
+    if url.len() > 2048 || url.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return None;
+    }
+    let lower = url.to_ascii_lowercase();
+    let ok = (lower.starts_with("https://") || lower.starts_with("http://")) && url.split("://").nth(1).map(|r| !r.is_empty() && !r.starts_with('/')).unwrap_or(false)
+        || (lower.starts_with("mailto:") && url.len() > 7);
+    ok.then(|| url.to_string())
+}
+
 pub fn notification_body(content: &str, max_chars: usize) -> String {
     let mut out = String::new();
     let mut in_code = false;

@@ -754,7 +754,7 @@ pub fn run() {
     let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyH);
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -848,6 +848,7 @@ pub fn run() {
             commands::delete_memory,
             commands::search_unified,
             commands::get_bridge_status,
+            commands::open_external,
             commands::set_nim_api_key,
             commands::execute_google_query,
             commands::write_obsidian_note,

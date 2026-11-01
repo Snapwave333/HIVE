@@ -345,6 +345,16 @@ pub async fn set_nim_api_key(key: String) -> Result<String, String> {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub fn open_external(url: String, app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let safe = crate::agents::safe_external_url(&url)
+        .ok_or_else(|| "Only http, https and mailto links can be opened".to_string())?;
+    app.opener()
+        .open_url(safe, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agency_state(state: State<'_, AppState>) -> Result<String, String> {
     let s = match state.daemon.state() {
         AgencyState::Running => "running",
