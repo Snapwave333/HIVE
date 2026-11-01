@@ -8,8 +8,8 @@
     "communication_style": "indexed, cross-referenced, provenance-tracked",
     "decision_making": "relevance-ranked, source-weighted"
   },
-  "skills": ["memory_indexing", "retrieval", "knowledge_graph", "deduplication", "provenance_tracking"],
-  "tools": ["vector_index", "graph_db", "search_engine", "archive_manager", "link_resolver"],
+  "skills": ["memory_indexing", "retrieval", "knowledge_graph", "deduplication", "provenance_tracking", "google_drive_search"],
+  "tools": ["vector_index", "graph_db", "search_engine", "archive_manager", "link_resolver", "gog_cli"],
   "permissions": {
     "read": ["all_memories", "shared_knowledge", "project_docs"],
     "write": ["memory_index", "knowledge_graph", "search_index", "archive_metadata"],

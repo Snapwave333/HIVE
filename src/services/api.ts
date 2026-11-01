@@ -1,4 +1,17 @@
-import { Channel, Agent, Message, TaskChunk, MemoryItem, BridgeStatus, Constitution } from "../types";
+import {
+  Channel,
+  Agent,
+  Message,
+  TaskChunk,
+  MemoryItem,
+  RelationshipEdge,
+  TempSpecialist,
+  AttachmentRecord,
+  UiDeployment,
+  AuditEntry,
+  BridgeStatus,
+  Constitution,
+} from "../types";
 
 // Check if running inside Tauri webview
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -8,12 +21,10 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<T>(cmd, args);
   }
-  // Browser dev fallback
   console.warn(`[Tauri Mock] ${cmd}`, args);
   return mockHandler<T>(cmd, args);
 }
 
-// Dev fallback mock data
 const mockChannels: Channel[] = [
   { id: 0, name: "agency-hq", slug: "agency-hq", is_group: true, description: "Primary Agency Group Chat", pinned: true, created_at: new Date().toISOString() },
   { id: 1, name: "Prime", slug: "prime", is_group: false, agent_codename: "PRIME", description: "Command / Strategy", pinned: false, created_at: new Date().toISOString() },
@@ -98,6 +109,13 @@ function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
       return true as unknown as T;
     case "get_agency_state":
       return "running" as unknown as T;
+    case "get_relationships":
+    case "get_temp_specialists":
+    case "get_ui_deployments":
+    case "get_audit_log":
+    case "get_memories":
+    case "get_tasks":
+      return [] as unknown as T;
     default:
       return {} as unknown as T;
   }
@@ -119,8 +137,19 @@ export const api = {
     tauriInvoke<void>("edit_message", { message_id: messageId, content }),
   deleteMessage: (messageId: string) =>
     tauriInvoke<void>("delete_message", { message_id: messageId }),
+  forwardMessage: (messageId: string, targetChannelId: number) =>
+    tauriInvoke<Message>("forward_message", {
+      message_id: messageId,
+      target_channel_id: targetChannelId,
+    }),
   toggleReaction: (messageId: string, emoji: string, userId: string) =>
     tauriInvoke<string>("toggle_reaction", { message_id: messageId, emoji, user_id: userId }),
+  uploadAttachment: (filename: string, mimeType: string, base64Data: string) =>
+    tauriInvoke<AttachmentRecord>("upload_attachment", {
+      filename,
+      mime_type: mimeType,
+      base64_data: base64Data,
+    }),
   getTasks: (statusFilter?: string) =>
     tauriInvoke<TaskChunk[]>("get_tasks", { status_filter: statusFilter }),
   createTask: (title: string, assignee: string, steps: string[]) =>
@@ -134,6 +163,48 @@ export const api = {
     }),
   getMemories: (category?: string) =>
     tauriInvoke<MemoryItem[]>("get_memories", { category }),
+  updateMemory: (memoryId: string, content: string, confidence: number) =>
+    tauriInvoke<void>("update_memory", { memory_id: memoryId, content, confidence }),
+  deleteMemory: (memoryId: string) =>
+    tauriInvoke<void>("delete_memory", { memory_id: memoryId }),
+  getRelationships: () => tauriInvoke<RelationshipEdge[]>("get_relationships"),
+  getTempSpecialists: () => tauriInvoke<TempSpecialist[]>("get_temp_specialists"),
+  spawnTempSpecialist: (
+    codename: string,
+    displayName: string,
+    role: string,
+    sponsorAgent: string,
+    ttlMinutes: number
+  ) =>
+    tauriInvoke<TempSpecialist>("spawn_temp_specialist", {
+      codename,
+      display_name: displayName,
+      role,
+      sponsor_agent: sponsorAgent,
+      ttl_minutes: ttlMinutes,
+    }),
+  getUiDeployments: () => tauriInvoke<UiDeployment[]>("get_ui_deployments"),
+  deployUiVersion: (
+    version: string,
+    authorAgent: string,
+    changelog: string,
+    approvalTier: string
+  ) =>
+    tauriInvoke<UiDeployment>("deploy_ui_version", {
+      version,
+      author_agent: authorAgent,
+      changelog,
+      approval_tier: approvalTier,
+    }),
+  rollbackUiVersion: (reason: string) =>
+    tauriInvoke<string>("rollback_ui_version", { reason }),
+  openPreviewWindow: (version: string) =>
+    tauriInvoke<void>("open_preview_window", { version }),
+  getAuditLog: (limit?: number) =>
+    tauriInvoke<AuditEntry[]>("get_audit_log", { limit }),
+  createDbBackup: () => tauriInvoke<string>("create_db_backup"),
+  hideMainWindow: () => tauriInvoke<void>("hide_main_window"),
+  stopAgencyAndQuit: () => tauriInvoke<void>("stop_agency_and_quit"),
   searchUnified: (query: string) =>
     tauriInvoke<{ query: string; messages: unknown[]; tasks: unknown[]; memories: unknown[] }>(
       "search_unified",

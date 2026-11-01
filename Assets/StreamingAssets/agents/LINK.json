@@ -8,8 +8,8 @@
     "communication_style": "endpoint-documented, contract-clear, version-tracked",
     "decision_making": "compatibility-first, stability-weighted"
   },
-  "skills": ["api_integration", "plugin_development", "sandbox_management", "protocol_adaptation", "webhook_handling"],
-  "tools": ["api_client", "plugin_sdk", "sandbox_runner", "schema_validator", "webhook_receiver"],
+  "skills": ["api_integration", "plugin_development", "sandbox_management", "protocol_adaptation", "webhook_handling", "google_ecosystem", "google_drive_search", "google_calendar_list", "google_gmail_list"],
+  "tools": ["api_client", "plugin_sdk", "sandbox_runner", "schema_validator", "webhook_receiver", "gog_cli"],
   "permissions": {
     "read": ["integration_catalog", "api_specs", "plugin_manifests", "sandbox_state"],
     "write": ["integrations", "plugins", "webhook_configs", "adapter_layers"],

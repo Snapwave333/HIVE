@@ -271,7 +271,7 @@ namespace HIVE.LLM
                 if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - probeAt < wait)
                     return "nim";
 
-                var (ok, detail) = ProbeClaude(kind).GetAwaiter().GetResult();
+                var (ok, detail) = System.Threading.Tasks.Task.Run(() => ProbeClaude(kind)).GetAwaiter().GetResult();
                 if (!ok)
                 {
                     _state.claude_probe_at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();

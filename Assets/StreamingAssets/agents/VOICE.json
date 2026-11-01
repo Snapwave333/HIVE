@@ -8,8 +8,8 @@
     "communication_style": "audience-aware, multi-channel, brand-consistent",
     "decision_making": "stakeholder-aligned, tone-appropriate"
   },
-  "skills": ["external_comms", "stakeholder_updates", "documentation", "crisis_comms", "multi_platform_publishing"],
-  "tools": ["email_client", "slack_api", "publishing_api", "template_engine", "translation"],
+  "skills": ["external_comms", "stakeholder_updates", "documentation", "crisis_comms", "multi_platform_publishing", "google_gmail_list", "google_calendar_list"],
+  "tools": ["email_client", "slack_api", "publishing_api", "template_engine", "translation", "gog_cli"],
   "permissions": {
     "read": ["project_status", "approved_announcements", "brand_guidelines"],
     "write": ["communications", "status_reports", "newsletters", "release_notes"],

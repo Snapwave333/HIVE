@@ -1660,13 +1660,16 @@ name = "hive-desktop"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "base64 0.23.1",
  "chrono",
  "dirs 5.0.1",
  "env_logger",
  "log",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",
@@ -1674,6 +1677,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tokio",
  "uuid",
+ "winreg",
 ]
 
 [[package]]

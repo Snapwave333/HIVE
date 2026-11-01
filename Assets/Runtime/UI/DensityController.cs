@@ -60,7 +60,7 @@ namespace HIVE.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(ToggleKey))
+            if (HIVE.Core.HiveInput.GetKeyDown(ToggleKey))
                 CycleMode();
         }
 

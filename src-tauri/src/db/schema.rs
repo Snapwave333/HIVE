@@ -1,4 +1,10 @@
 pub const SCHEMA_V1: &str = r#"
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS channels (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -22,6 +28,40 @@ CREATE TABLE IF NOT EXISTS agents (
     tools TEXT,
     permissions TEXT,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS relationships (
+    source_agent TEXT NOT NULL,
+    target_agent TEXT NOT NULL,
+    edge_type TEXT NOT NULL,
+    weight REAL NOT NULL DEFAULT 1.0,
+    notes TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (source_agent, target_agent, edge_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_agent);
+CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships(target_agent);
+
+CREATE TABLE IF NOT EXISTS temp_specialists (
+    codename TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    sponsor_agent TEXT NOT NULL,
+    permissions TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(sponsor_agent) REFERENCES agents(codename)
+);
+
+CREATE TABLE IF NOT EXISTS attachments (
+    hash TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -75,6 +115,19 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 
 CREATE INDEX IF NOT EXISTS idx_memories_cat ON memories(category);
+
+CREATE TABLE IF NOT EXISTS decisions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    level INTEGER NOT NULL,
+    proposer TEXT NOT NULL,
+    status TEXT NOT NULL,
+    votes_json TEXT NOT NULL,
+    dissent_summary TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
 
 CREATE TABLE IF NOT EXISTS ui_deployments (
     version TEXT PRIMARY KEY,

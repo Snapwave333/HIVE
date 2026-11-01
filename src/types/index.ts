@@ -73,6 +73,59 @@ export interface MemoryItem {
   created_at: string;
 }
 
+export interface RelationshipEdge {
+  source_agent: string;
+  target_agent: string;
+  edge_type: string;
+  weight: number;
+  interaction_count: number;
+  last_interaction_at: string;
+  notes?: string;
+}
+
+export interface TempSpecialist {
+  id: string;
+  codename: string;
+  display_name: string;
+  role: string;
+  sponsor_agent: string;
+  task_id?: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface AttachmentRecord {
+  id: string;
+  message_id?: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256_hash: string;
+  storage_path: string;
+  created_at: string;
+}
+
+export interface UiDeployment {
+  version: string;
+  bundle_hash: string;
+  author_agent: string;
+  changelog: string;
+  approval_tier: string;
+  status: string;
+  previous_version?: string;
+  created_at: string;
+}
+
+export interface AuditEntry {
+  id: number;
+  actor: string;
+  action: string;
+  target?: string;
+  details?: string;
+  timestamp: string;
+}
+
 export interface BridgeStatus {
   google_connected: boolean;
   google_account: string;

@@ -218,6 +218,24 @@ function Invoke-Doctor {
     } else {
         Write-Host "  [WARN] NVIDIA_API_KEY not set. Falling back to offline/mock mode." -ForegroundColor Yellow
     }
+
+    # Google Ecosystem / gog CLI check
+    $userProf = [Environment]::GetFolderPath("UserProfile")
+    $gogBat = Join-Path $userProf "gog-wrapper\gog.bat"
+    $gogExe = Join-Path $userProf "go\bin\gog.exe"
+    if (Test-Path $gogBat) {
+        Write-Host "  [OK] Google CLI wrapper detected at $gogBat" -ForegroundColor Green
+        try {
+            $authJson = & "$gogBat" auth status --json 2>$null | Out-String | ConvertFrom-Json
+            if ($authJson -and $authJson.account.email) {
+                Write-Host "  [OK] Google Account authenticated: $($authJson.account.email)" -ForegroundColor Green
+            }
+        } catch { }
+    } elseif (Test-Path $gogExe) {
+        Write-Host "  [OK] Google CLI detected at $gogExe" -ForegroundColor Green
+    } else {
+        Write-Host "  [WARN] Google CLI (gog) not detected in standard paths." -ForegroundColor Yellow
+    }
 }
 
 function Show-Help {
@@ -232,6 +250,7 @@ COMMANDS:
   test             Execute comprehensive end-to-end integration test suite
   scenes           Rebuild and wire all 7 HQ scenes and cybernetic prefabs
   doctor           Inspect health of Unity, schemas, scenes, and API keys
+  gog <args>       Run Google Ecosystem CLI directly with authentication
   help             Show this help reference
 
 CAPTURE OPTIONS:
@@ -287,6 +306,21 @@ function Invoke-Launch {
     }
 }
 
+function Invoke-Gog {
+    param([string[]]$ArgsList)
+    $userProf = [Environment]::GetFolderPath("UserProfile")
+    $gogBat = Join-Path $userProf "gog-wrapper\gog.bat"
+    $gogExe = Join-Path $userProf "go\bin\gog.exe"
+
+    if (Test-Path $gogBat) {
+        & "$gogBat" @ArgsList
+    } elseif (Test-Path $gogExe) {
+        & "$gogExe" @ArgsList
+    } else {
+        Write-Host "[HIVE CLI] Error: gog CLI not found at $gogBat or $gogExe" -ForegroundColor Red
+    }
+}
+
 # Main Dispatch
 switch ($Command) {
     "launch"  { Show-Header; Invoke-Launch }
@@ -296,5 +330,7 @@ switch ($Command) {
     "test"    { Show-Header; Invoke-Test }
     "scenes"  { Show-Header; Invoke-Scenes }
     "doctor"  { Show-Header; Invoke-Doctor }
+    "gog"     { Invoke-Gog -ArgsList $RemainingArgs }
+    "google"  { Invoke-Gog -ArgsList $RemainingArgs }
     default   { Show-Help }
 }

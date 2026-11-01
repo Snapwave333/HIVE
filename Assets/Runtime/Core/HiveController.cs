@@ -54,6 +54,7 @@ namespace HIVE.Core
         public HIVE.Skills.SkillRegistry SkillRegistry { get; private set; }
         public HIVE.Voice.VoiceController VoiceController { get; private set; }
         public HIVE.Coding.ICodingOrchestrator CodingOrchestrator { get; private set; }
+        public HIVE.Integrations.GoogleEcosystemBridge GoogleEcosystem { get; private set; }
 
         public bool IsInitialized { get; private set; }
 
@@ -122,9 +123,16 @@ namespace HIVE.Core
         private IEnumerator CheckLLMHealth()
         {
             Debug.Log("[HIVE] Checking LLM health...");
-            var health = NimCascadeRouter.GetHealthAsync().GetAwaiter().GetResult();
-            Debug.Log($"[HIVE] LLM Health: {(health.ok ? "OK" : "DEGRADED")} - {health.detail}");
-            yield return null;
+            var healthTask = System.Threading.Tasks.Task.Run(() => NimCascadeRouter.GetHealthAsync());
+            while (!healthTask.IsCompleted)
+            {
+                yield return null;
+            }
+            if (healthTask.IsCompletedSuccessfully)
+            {
+                var health = healthTask.Result;
+                Debug.Log($"[HIVE] LLM Health: {(health.ok ? "OK" : "DEGRADED")} - {health.detail}");
+            }
         }
 
         private IEnumerator InitializeAgents()
@@ -180,6 +188,29 @@ namespace HIVE.Core
             // Initialize Coding Orchestrator
             Debug.Log("[HIVE] Initializing CodingOrchestrator...");
             CodingOrchestrator = new HIVE.Coding.CodingOrchestrator();
+
+            // Initialize Google Account Ecosystem Bridge (gog CLI)
+            Debug.Log("[HIVE] Initializing GoogleEcosystemBridge...");
+            GoogleEcosystem = HIVE.Integrations.GoogleEcosystemBridge.Instance;
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var status = await GoogleEcosystem.CheckAuthStatusAsync();
+                    if (status.Authenticated)
+                    {
+                        Debug.Log($"[HIVE] Google Ecosystem connected: {status.Email} (Client: {status.Client})");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[HIVE] Google Ecosystem unauthenticated: {status.Error}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[HIVE] Google Ecosystem status probe error: {ex.Message}");
+                }
+            });
 
             yield return null;
         }

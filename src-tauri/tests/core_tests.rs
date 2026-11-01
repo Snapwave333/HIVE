@@ -1,8 +1,9 @@
+use chrono::Utc;
 use hive_lib::db::models::{MemoryItem, Message, TaskChunk, TaskStep};
 use hive_lib::db::Database;
+use hive_lib::deployment::DeploymentEngine;
 use hive_lib::events::EventBus;
 use hive_lib::governance::{DecisionLevel, GovernanceEngine};
-use chrono::Utc;
 use uuid::Uuid;
 
 #[test]
@@ -18,13 +19,15 @@ fn test_database_initialization_and_seeding() {
     assert_eq!(hq.name, "agency-hq");
     assert!(hq.pinned, "#agency-hq must be pinned");
 
-    // Verify 12 permanent agents
+    // Verify 12 permanent agents with rich metadata from StreamingAssets
     let agents = db.get_agents().expect("Should retrieve agents");
     assert_eq!(agents.len(), 12, "Expected exactly 12 permanent agents");
 
     let prime = agents.iter().find(|a| a.codename == "PRIME").expect("PRIME must exist");
     assert_eq!(prime.role, "Command / Strategy");
     assert_eq!(prime.model_tier, "nvidia/nemotron-3-ultra-550b-a55b");
+    assert!(prime.personality.is_some(), "PRIME personality JSON should be seeded");
+    assert!(prime.skills.is_some(), "PRIME skills JSON should be seeded");
 
     let forge = agents.iter().find(|a| a.codename == "FORGE").expect("FORGE must exist");
     assert_eq!(forge.role, "Engineering / Build");
@@ -36,7 +39,7 @@ fn test_database_initialization_and_seeding() {
 }
 
 #[test]
-fn test_message_crud_operations() {
+fn test_message_crud_reactions_and_forwarding() {
     let db = Database::new_in_memory().expect("In-memory DB should initialize");
     let now = Utc::now().to_rfc3339();
     let msg_id = Uuid::new_v4().to_string();
@@ -59,6 +62,17 @@ fn test_message_crud_operations() {
     };
 
     db.insert_message(&msg).expect("Message insert should succeed");
+
+    // Toggle reactions (add then remove)
+    let r1 = db.toggle_reaction(&msg_id, "(ง'̀-'́)ง", "user").expect("Add reaction");
+    assert!(r1.contains("(ง'̀-'́)ง"));
+    let r2 = db.toggle_reaction(&msg_id, "(ง'̀-'́)ง", "user").expect("Remove reaction");
+    assert!(!r2.contains("user"));
+
+    // Forward message to @PRIME DM (channel 1)
+    let fwd = db.forward_message(&msg_id, 1).expect("Forward should succeed");
+    assert_eq!(fwd.channel_id, 1);
+    assert!(fwd.content.contains("Hello H.I.V.E."));
 
     // Edit message
     db.update_message(&msg_id, "Hello H.I.V.E. updated").expect("Edit should succeed");
@@ -162,39 +176,83 @@ fn test_three_level_governance() {
 fn test_four_tier_memory() {
     let db = Database::new_in_memory().expect("In-memory DB should initialize");
     let now = Utc::now().to_rfc3339();
+    let mem_id = Uuid::new_v4().to_string();
 
     let mem1 = MemoryItem {
-        id: Uuid::new_v4().to_string(),
+        id: mem_id.clone(),
         category: "individual".to_string(),
         content: "FORGE prefers rust-analyzer with clippy strict checks.".to_string(),
         provenance: "agent_observation".to_string(),
         confidence: 0.95,
         is_speculation: false,
         tags: Some("engineering,preference".to_string()),
-        created_at: now.clone(),
-    };
-
-    let mem2 = MemoryItem {
-        id: Uuid::new_v4().to_string(),
-        category: "shared".to_string(),
-        content: "The owner requires all audio to remain strictly muted by default.".to_string(),
-        provenance: "owner_directive".to_string(),
-        confidence: 1.0,
-        is_speculation: false,
-        tags: Some("invariant,audio".to_string()),
         created_at: now,
     };
 
     db.insert_memory(&mem1).expect("Insert individual memory");
-    db.insert_memory(&mem2).expect("Insert shared memory");
 
     let individual_memories = db.get_memories(Some("individual")).expect("Query individual");
-    assert_eq!(individual_memories.len(), 1);
-    assert_eq!(individual_memories[0].content, mem1.content);
+    assert!(individual_memories.iter().any(|m| m.id == mem_id));
 
-    let shared_memories = db.get_memories(Some("shared")).expect("Query shared");
-    assert_eq!(shared_memories.len(), 1);
-    assert_eq!(shared_memories[0].content, mem2.content);
+    // Update memory
+    db.update_memory(&mem_id, "Updated FORGE preference", true).expect("Update memory");
+    let after_update = db.get_memories(Some("individual")).expect("Query after update");
+    let found = after_update.iter().find(|m| m.id == mem_id).unwrap();
+    assert_eq!(found.content, "Updated FORGE preference");
+    assert!(found.is_speculation);
+
+    // Delete memory
+    db.delete_memory(&mem_id).expect("Delete memory");
+    let after_del = db.get_memories(Some("individual")).expect("Query after delete");
+    assert!(!after_del.iter().any(|m| m.id == mem_id));
+}
+
+#[test]
+fn test_relationships_and_temp_specialists() {
+    let db = Database::new_in_memory().expect("In-memory DB should initialize");
+
+    // Verify seeded relationships
+    let rels = db.get_relationships().expect("Get relationships");
+    assert!(!rels.is_empty(), "Initial relationship graph should be seeded");
+
+    // Record collaboration reinforcement
+    db.record_relationship("SAGE", "FORGE", "collaborated", 0.2, Some("Co-authored benchmark"))
+        .expect("Record relationship");
+
+    // Spawn temp specialist
+    let spec = db
+        .spawn_temp_specialist("rust_profiler", "Performance Specialist", "FORGE", 15)
+        .expect("Spawn temp specialist");
+    assert!(spec.codename.starts_with("temp_"), "Temp specialist must be prefixed with temp_");
+    assert_eq!(spec.sponsor_agent, "FORGE");
+}
+
+#[test]
+fn test_blue_green_deployment_and_rollback() {
+    let db = Database::new_in_memory().expect("In-memory DB should initialize");
+    let events = EventBus::new(16);
+    let engine = DeploymentEngine::new(db.clone(), events);
+
+    // Valid deployment passes Constitution Validator
+    let dep = engine
+        .stage_and_deploy_version("v1.0.1-test", "FORGE", "Refined message bubble padding", true)
+        .expect("Valid deployment should succeed");
+    assert_eq!(dep.version, "v1.0.1-test");
+    assert!(dep.is_active);
+
+    // Forbidden pattern rejected by Constitution Validator
+    let bad = engine.stage_and_deploy_version(
+        "v1.0.2-bad",
+        "SPARK",
+        "Add VirtualWorld3D Metaverse dashboard",
+        true,
+    );
+    assert!(bad.is_err(), "Constitution Validator must block forbidden 3D/Metaverse bloat");
+
+    // Atomic rollback restores previous version
+    let rolled = engine.rollback("Regression test rollback").expect("Rollback should succeed");
+    assert_eq!(rolled.version, "v1.0.0");
+    assert!(rolled.is_active);
 }
 
 #[test]

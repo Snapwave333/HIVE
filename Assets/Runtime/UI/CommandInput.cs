@@ -64,19 +64,22 @@ namespace HIVE.UI
             if (UIDocument != null)
             {
                 _root = UIDocument.rootVisualElement;
-                if (CommandInputTemplate != null)
+                if (CommandInputTemplate != null && _root != null)
                     CommandInputTemplate.CloneTree(_root);
 
-                _inputField = _root.Q<TextField>("command-input");
-                _messageList = _root.Q<ListView>("message-list");
-                _contextDropdown = _root.Q<DropdownField>("context-dropdown");
-                _modeButton = _root.Q<Button>("mode-button");
-                _voiceButton = _root.Q<Button>("voice-button");
-                _attachButton = _root.Q<Button>("attach-button");
-                _attachmentsContainer = _root.Q<VisualElement>("attachments-container");
-                _contextBadge = _root.Q<Label>("context-badge");
+                if (_root != null)
+                {
+                    _inputField = _root.Q<TextField>("command-input");
+                    _messageList = _root.Q<ListView>("message-list");
+                    _contextDropdown = _root.Q<DropdownField>("context-dropdown");
+                    _modeButton = _root.Q<Button>("mode-button");
+                    _voiceButton = _root.Q<Button>("voice-button");
+                    _attachButton = _root.Q<Button>("attach-button");
+                    _attachmentsContainer = _root.Q<VisualElement>("attachments-container");
+                    _contextBadge = _root.Q<Label>("context-badge");
 
-                SetupUI();
+                    SetupUI();
+                }
             }
         }
 
@@ -104,7 +107,7 @@ namespace HIVE.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(ToggleKey))
+            if (HiveInput.GetKeyDown(ToggleKey))
                 ToggleFocus();
 
             // Process voice if active
@@ -345,6 +348,10 @@ namespace HIVE.UI
                     _messages.Clear();
                     _messageList.RefreshItems();
                     break;
+                case "gog":
+                case "google":
+                    await ExecuteGoogleCommand(cmd.Content);
+                    break;
                 default:
                     AddMessage(new MessageItem
                     {
@@ -379,6 +386,7 @@ namespace HIVE.UI
   /reject task-id        → Reject pending task
   /status                → Request agency status
   /brief                 → Request daily briefing
+  /gog [subcommand]      → Google Ecosystem access (status, me, drive, cal, mail, tasks)
   /clear                 → Clear message history
 
 <b>Context:</b>
@@ -401,6 +409,202 @@ namespace HIVE.UI
                 Content = help,
                 Timestamp = DateTime.Now
             });
+        }
+
+        private async System.Threading.Tasks.Task ExecuteGoogleCommand(string input)
+        {
+            var bridge = HIVE.Integrations.GoogleEcosystemBridge.Instance;
+            var parts = (input ?? "").Trim().Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+            var subcmd = parts.Length > 0 ? parts[0].ToLowerInvariant() : "status";
+            var rest = parts.Length > 1 ? parts[1].Trim() : "";
+
+            AddMessage(new MessageItem
+            {
+                Type = MessageType.System,
+                Content = $"[GOG] Querying Google Ecosystem ({subcmd})...",
+                Timestamp = DateTime.Now
+            });
+
+            switch (subcmd)
+            {
+                case "help":
+                    AddMessage(new MessageItem
+                    {
+                        Type = MessageType.Help,
+                        Content = "<b>Google Ecosystem CLI (/gog)</b>\n" +
+                                  "  /gog status       → Check authentication status and connected account\n" +
+                                  "  /gog me           → User profile information\n" +
+                                  "  /gog drive [text] → Search or list Google Drive files\n" +
+                                  "  /gog cal          → Upcoming Google Calendar events\n" +
+                                  "  /gog mail [query] → Search or list recent Gmail messages\n" +
+                                  "  /gog tasks        → Google Task lists\n" +
+                                  "  /gog raw <args>   → Execute raw gog CLI arguments",
+                        Timestamp = DateTime.Now
+                    });
+                    break;
+
+                case "status":
+                    var auth = await bridge.CheckAuthStatusAsync();
+                    AddMessage(new MessageItem
+                    {
+                        Type = auth.Authenticated ? MessageType.System : MessageType.Error,
+                        Content = auth.Authenticated
+                            ? $"<b>Google Connected:</b> {auth.Email}\nClient: {auth.Client} | Keyring: {auth.KeyringBackend}\nCLI: {bridge.CliPath}"
+                            : $"<b>Google Disconnected:</b> {auth.Error}",
+                        Timestamp = DateTime.Now
+                    });
+                    break;
+
+                case "me":
+                case "whoami":
+                    var profile = await bridge.GetProfileAsync();
+                    AddMessage(new MessageItem
+                    {
+                        Type = profile.Success ? MessageType.System : MessageType.Error,
+                        Content = profile.Success
+                            ? $"<b>Google Profile:</b> {profile.Email}\nResource: {profile.ResourceName}"
+                            : $"<b>Google Profile Error:</b> {profile.Error}",
+                        Timestamp = DateTime.Now
+                    });
+                    break;
+
+                case "drive":
+                    var files = string.IsNullOrEmpty(rest)
+                        ? await bridge.ListDriveFilesAsync(5)
+                        : await bridge.SearchDriveAsync(rest, 5);
+
+                    if (files == null || files.Count == 0)
+                    {
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = $"[Drive] No files found for '{(string.IsNullOrEmpty(rest) ? "recent" : rest)}'.",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    else
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine($"<b>Google Drive ({(string.IsNullOrEmpty(rest) ? "Recent" : rest)}):</b>");
+                        foreach (var f in files)
+                        {
+                            sb.AppendLine($"• {f.name} ({f.mimeType})");
+                            if (!string.IsNullOrEmpty(f.webViewLink)) sb.AppendLine($"  {f.webViewLink}");
+                        }
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = sb.ToString().TrimEnd(),
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    break;
+
+                case "cal":
+                case "calendar":
+                    var events = await bridge.ListCalendarEventsAsync(5);
+                    if (events == null || events.Count == 0)
+                    {
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = "[Calendar] No upcoming events found.",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    else
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine("<b>Upcoming Google Calendar Events:</b>");
+                        foreach (var ev in events)
+                        {
+                            var title = string.IsNullOrEmpty(ev.summary) ? "Untitled Event" : ev.summary;
+                            sb.AppendLine($"• {title} [{ev.status}]");
+                            if (!string.IsNullOrEmpty(ev.location)) sb.AppendLine($"  Location: {ev.location}");
+                        }
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = sb.ToString().TrimEnd(),
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    break;
+
+                case "mail":
+                case "gmail":
+                    var q = string.IsNullOrEmpty(rest) ? "newer_than:7d" : rest;
+                    var mails = await bridge.ListGmailMessagesAsync(q, 5);
+                    if (mails == null || mails.Count == 0)
+                    {
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = $"[Gmail] No messages matching '{q}'.",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    else
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine($"<b>Recent Gmail Messages ({q}):</b>");
+                        foreach (var m in mails)
+                        {
+                            sb.AppendLine($"• [{m.date}] {m.from}: {m.subject}");
+                        }
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = sb.ToString().TrimEnd(),
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    break;
+
+                case "tasks":
+                case "task":
+                    var tasks = await bridge.ListTasksAsync();
+                    if (tasks == null || tasks.Count == 0)
+                    {
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = "[Tasks] No task lists found.",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    else
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine("<b>Google Task Lists:</b>");
+                        foreach (var t in tasks)
+                        {
+                            sb.AppendLine($"• {t.title} (ID: {t.id})");
+                        }
+                        AddMessage(new MessageItem
+                        {
+                            Type = MessageType.System,
+                            Content = sb.ToString().TrimEnd(),
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    break;
+
+                case "raw":
+                default:
+                    var rawTarget = subcmd == "raw" ? rest : input;
+                    var rawParts = rawTarget.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                    var cmdName = rawParts.Length > 0 ? rawParts[0] : "auth";
+                    var cmdArgs = rawParts.Length > 1 ? rawParts[1] : "status --json";
+                    var rawRes = await bridge.ExecuteCommandAsync(cmdName, cmdArgs);
+                    AddMessage(new MessageItem
+                    {
+                        Type = rawRes.Success ? MessageType.System : MessageType.Error,
+                        Content = $"[gog {cmdName}] Output:\n{(rawRes.Success ? rawRes.Output : rawRes.Error)}",
+                        Timestamp = DateTime.Now
+                    });
+                    break;
+            }
         }
 
         private void ListAgents()

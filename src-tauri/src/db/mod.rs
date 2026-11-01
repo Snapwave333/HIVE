@@ -2,12 +2,30 @@ pub mod models;
 pub mod schema;
 
 use anyhow::{Context, Result};
-use chrono::Utc;
+use base64::Engine;
+use chrono::{Duration as ChronoDuration, Utc};
 use models::*;
 use rusqlite::{params, Connection};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+
+const AGENT_JSONS: &[(&str, &str)] = &[
+    ("PRIME", include_str!("../../../Assets/StreamingAssets/agents/PRIME.json")),
+    ("SAGE", include_str!("../../../Assets/StreamingAssets/agents/SAGE.json")),
+    ("FORGE", include_str!("../../../Assets/StreamingAssets/agents/FORGE.json")),
+    ("SENTINEL", include_str!("../../../Assets/StreamingAssets/agents/SENTINEL.json")),
+    ("VOICE", include_str!("../../../Assets/StreamingAssets/agents/VOICE.json")),
+    ("ARCHIVIST", include_str!("../../../Assets/StreamingAssets/agents/ARCHIVIST.json")),
+    ("CONDUCTOR", include_str!("../../../Assets/StreamingAssets/agents/CONDUCTOR.json")),
+    ("VISION", include_str!("../../../Assets/StreamingAssets/agents/VISION.json")),
+    ("LEDGER", include_str!("../../../Assets/StreamingAssets/agents/LEDGER.json")),
+    ("LINK", include_str!("../../../Assets/StreamingAssets/agents/LINK.json")),
+    ("GAUGE", include_str!("../../../Assets/StreamingAssets/agents/GAUGE.json")),
+    ("SPARK", include_str!("../../../Assets/StreamingAssets/agents/SPARK.json")),
+];
 
 #[derive(Clone)]
 pub struct Database {
@@ -16,15 +34,18 @@ pub struct Database {
 }
 
 impl Database {
+    pub fn app_root_dir() -> PathBuf {
+        dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("Lushapps")
+            .join("HIVE")
+    }
+
     pub fn new(custom_path: Option<PathBuf>) -> Result<Self> {
         let path = match custom_path {
             Some(p) => p,
             None => {
-                let app_dir = dirs::data_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join("Lushapps")
-                    .join("HIVE")
-                    .join("data");
+                let app_dir = Self::app_root_dir().join("data");
                 std::fs::create_dir_all(&app_dir)
                     .with_context(|| format!("Failed to create data dir: {:?}", app_dir))?;
                 app_dir.join("hive.db")
@@ -48,6 +69,11 @@ impl Database {
 
         db.init_schema()?;
         db.seed_defaults()?;
+
+        // Create automatic daily snapshot if not in-memory
+        if db.db_path != PathBuf::from(":memory:") {
+            let _ = db.create_backup();
+        }
 
         Ok(db)
     }
@@ -74,7 +100,29 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(schema::SCHEMA_V1)
             .context("Failed to execute initial schema migrations")?;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (1, 'V1__initial_schema', ?1)",
+            params![now],
+        )?;
         Ok(())
+    }
+
+    pub fn create_backup(&self) -> Result<PathBuf> {
+        if self.db_path == PathBuf::from(":memory:") {
+            anyhow::bail!("Cannot backup in-memory database to disk");
+        }
+        let backup_dir = Self::app_root_dir().join("backups");
+        std::fs::create_dir_all(&backup_dir)?;
+        let date_tag = Utc::now().format("%Y-%m-%d").to_string();
+        let backup_file = backup_dir.join(format!("hive_{}.db", date_tag));
+
+        if !backup_file.exists() {
+            let conn = self.conn.lock().unwrap();
+            let escaped = backup_file.to_string_lossy().replace('\'', "''");
+            let _ = conn.execute_batch(&format!("VACUUM INTO '{}';", escaped));
+        }
+        Ok(backup_file)
     }
 
     pub fn seed_defaults(&self) -> Result<()> {
@@ -96,43 +144,39 @@ impl Database {
             )?;
         }
 
-        // 2. Seed 12 Permanent Agents
-        let agents_data = vec![
-            ("PRIME", "Prime", "Command / Strategy", "nvidia/nemotron-3-ultra-550b-a55b", "#85D94B", "#42CFC4", "Direction, high-stakes decisions, owner liaison"),
-            ("SAGE", "Sage", "Research & Analysis", "nvidia/nemotron-3.5-super-vl-120b-a12b", "#42CFC4", "#85D94B", "Deep research, synthesis, competitive intelligence"),
-            ("FORGE", "Forge", "Engineering / Build", "nvidia/nemotron-3.5-lightning-30b-a3b", "#85D94B", "#42CFC4", "Code generation, architecture, CI/CD, tooling"),
-            ("SENTINEL", "Sentinel", "Security & Audit", "mistralai/mistral-large-4-1t-a52b", "#E45B5B", "#B8E8D8", "Threat modeling, permission audits, incident response"),
-            ("VOICE", "Voice", "Communications", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "#42CFC4", "#B8E8D8", "External comms, stakeholder updates, documentation"),
-            ("ARCHIVIST", "Archivist", "Knowledge & Memory", "openai/gpt-oss-20b", "#B8E8D8", "#42CFC4", "Memory indexing, retrieval, knowledge graph maintenance"),
-            ("CONDUCTOR", "Conductor", "Operations / Queue", "minimaxai/minimax-m3.1-flash", "#85D94B", "#B8E8D8", "Task routing, dependency resolution, throughput optimization"),
-            ("VISION", "Vision", "Creative / Design", "nvidia/nemotron-3.5-super-vl-120b-a12b", "#42CFC4", "#85D94B", "Visual assets, UI/UX, branding, presentation design"),
-            ("LEDGER", "Ledger", "Finance / Resources", "nvidia/nemotron-3-ultra-550b-a55b", "#E5A94B", "#85D94B", "Budget tracking, API cost optimization, resource allocation"),
-            ("LINK", "Link", "Integration / Tools", "mistralai/mistral-large-4-1t-a52b", "#42CFC4", "#85D94B", "API integrations, plugin development, sandbox management"),
-            ("GAUGE", "Gauge", "Quality / Verification", "nvidia/nemotron-3.5-lightning-30b-a3b", "#385C32", "#85D94B", "Testing, verification, regression detection, standards"),
-            ("SPARK", "Spark", "Innovation / Experiments", "nvidia/nemotron-3.5-bolt-e4b", "#85D94B", "#42CFC4", "R&D, prototype evaluation, emerging tech assessment"),
-        ];
+        // 2. Seed 12 Permanent Agents from StreamingAssets JSON definitions
+        for (idx, (codename, raw_json)) in AGENT_JSONS.iter().enumerate() {
+            let parsed: serde_json::Value = serde_json::from_str(raw_json).unwrap_or_default();
+            let display = parsed["display_name"].as_str().unwrap_or(codename);
+            let role = parsed["role"].as_str().unwrap_or("Specialist");
+            let model = parsed["model_tier"].as_str().unwrap_or("nvidia/nemotron-3.5-lightning-30b-a3b");
+            let avatar_cfg = parsed["avatar_config"].to_string();
+            let personality = parsed.get("personality").map(|v| v.to_string());
+            let skills = parsed.get("skills").map(|v| v.to_string());
+            let tools = parsed.get("tools").map(|v| v.to_string());
+            let permissions = parsed.get("permissions").map(|v| v.to_string());
 
-        for (idx, (codename, display, role, model, primary_col, secondary_col, desc)) in agents_data.iter().enumerate() {
-            let agent_exists: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM agents WHERE codename = ?1",
-                params![codename],
-                |row| row.get(0),
+            conn.execute(
+                "INSERT INTO agents (codename, display_name, role, model_tier, status, avatar_config, personality, skills, tools, permissions, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, 'available', ?5, ?6, ?7, ?8, ?9, ?10)
+                 ON CONFLICT(codename) DO UPDATE SET
+                    personality = COALESCE(agents.personality, excluded.personality),
+                    skills = COALESCE(agents.skills, excluded.skills),
+                    tools = COALESCE(agents.tools, excluded.tools),
+                    permissions = COALESCE(agents.permissions, excluded.permissions)",
+                params![
+                    codename,
+                    display,
+                    role,
+                    model,
+                    avatar_cfg,
+                    personality,
+                    skills,
+                    tools,
+                    permissions,
+                    now
+                ],
             )?;
-
-            let avatar_cfg = serde_json::json!({
-                "silhouette": "geometric_hexagon",
-                "primary_color": primary_col,
-                "secondary_color": secondary_col,
-                "animation_set": "active"
-            }).to_string();
-
-            if agent_exists == 0 {
-                conn.execute(
-                    "INSERT INTO agents (codename, display_name, role, model_tier, status, avatar_config, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, 'available', ?5, ?6)",
-                    params![codename, display, role, model, avatar_cfg, now],
-                )?;
-            }
 
             // Seed agent DM channel (IDs 1 through 12)
             let channel_id = (idx + 1) as i64;
@@ -151,14 +195,86 @@ impl Database {
                         display,
                         codename.to_lowercase(),
                         codename,
-                        format!("Direct channel with {} ({}) — {}", display, role, desc),
+                        format!("Direct channel with {} ({}) — Model: {}", display, role, model),
                         now
                     ],
                 )?;
             }
         }
 
-        // 3. Seed welcome message in #agency-hq if empty
+        // 3. Seed Initial Inter-Agent Relationship Graph
+        let rel_count: i64 = conn.query_row("SELECT COUNT(*) FROM relationships", [], |r| r.get(0))?;
+        if rel_count == 0 {
+            let initial_edges = vec![
+                ("PRIME", "CONDUCTOR", "handed_off", 0.92, "Strategic sprint decomposition into 5-minute action chunks"),
+                ("FORGE", "GAUGE", "collaborated", 0.96, "Continuous build & regression verification pipeline"),
+                ("SAGE", "ARCHIVIST", "collaborated", 0.89, "Research synthesis indexed into Obsidian knowledge graph"),
+                ("VISION", "FORGE", "collaborated", 0.91, "Minimalist Borg design token implementation"),
+                ("SENTINEL", "LINK", "collaborated", 0.94, "CLI bridge allowlist & credential isolation audit"),
+                ("SPARK", "PRIME", "disagreed", 0.78, "Debated experimental feature velocity vs stability window; resolved via preview sandbox"),
+                ("PRIME", "SPARK", "mentored", 0.85, "Guided R&D prototype alignment with Application Constitution"),
+            ];
+            for (src, dst, kind, w, note) in initial_edges {
+                conn.execute(
+                    "INSERT OR IGNORE INTO relationships (source_agent, target_agent, edge_type, weight, notes, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![src, dst, kind, w, note, now],
+                )?;
+            }
+        }
+
+        // 4. Seed Initial 4-Tier Memories if empty
+        let mem_count: i64 = conn.query_row("SELECT COUNT(*) FROM memories", [], |r| r.get(0))?;
+        if mem_count == 0 {
+            let seed_memories = vec![
+                ("shared", "Application Constitution v1.0.0 is locked: 1 #agency-hq + 12 permanent agent DMs, audio 100% muted by default, ADHD 5-minute task chunking.", "constitution.json", 1.0, false, "constitution,invariant"),
+                ("operational", "Google CLI bridge (gog.bat) verified for account elikenny333@gmail.com with Drive, Calendar, Gmail, and Tasks scopes.", "LINK_audit", 1.0, false, "google,gog,bridge"),
+                ("relationship", "FORGE and GAUGE established a mandatory pre-deployment verification handshake on all UI bundles.", "agency_retrospective", 0.95, false, "forge,gauge,workflow"),
+                ("individual", "VISION notes: Maintain strict 1px hairline borders (#212E3D) and matte graphite surfaces (#0B0F14 / #121820) for zero visual fatigue.", "VISION_journal", 0.95, false, "design,borg,accessibility"),
+            ];
+            for (cat, content, prov, conf, spec, tags) in seed_memories {
+                conn.execute(
+                    "INSERT INTO memories (id, category, content, provenance, confidence, is_speculation, tags, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![Uuid::new_v4().to_string(), cat, content, prov, conf, spec, tags, now],
+                )?;
+            }
+        }
+
+        // 5. Seed Initial 5-Minute Task Chunk if empty
+        let task_count: i64 = conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
+        if task_count == 0 {
+            let initial_steps = serde_json::to_string(&vec![
+                TaskStep {
+                    index: 0,
+                    title: "Verify SQLite WAL & 12 Permanent Agent Schemas".to_string(),
+                    estimated_minutes: 5,
+                    completed: true,
+                    completed_at: Some(now.clone()),
+                },
+                TaskStep {
+                    index: 1,
+                    title: "Synchronize Google Calendar & Drive via gog CLI".to_string(),
+                    estimated_minutes: 5,
+                    completed: false,
+                    completed_at: None,
+                },
+                TaskStep {
+                    index: 2,
+                    title: "Audit Application Constitution Invariants".to_string(),
+                    estimated_minutes: 5,
+                    completed: false,
+                    completed_at: None,
+                },
+            ])?;
+            conn.execute(
+                "INSERT INTO tasks (id, title, description, assignee, priority, status, steps, current_step_index, resume_checkpoint, created_at, updated_at)
+                 VALUES (?1, 'Agency Boot & Ecosystem Synchronization', 'ADHD-friendly 5-minute micro-step checklist', 'CONDUCTOR', 'high', 'active', ?2, 1, 'Step 1/3 verified clean; ready for gog sync', ?3, ?3)",
+                params![Uuid::new_v4().to_string(), initial_steps, now],
+            )?;
+        }
+
+        // 6. Seed welcome message in #agency-hq if empty
         let msg_count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM messages WHERE channel_id = 0",
             [],
@@ -172,21 +288,24 @@ impl Database {
                  VALUES (?1, 0, 'PRIME', 'Command / Strategy', ?2, 1, ?3, ?3)",
                 params![
                     welcome_id,
-                    "⬡ **H.I.V.E. Agency Online**\n\nAll 12 permanent agents are initialized and synchronized. The agency operates 24/7 across `#agency-hq` and 12 dedicated agent direct lines.\n\n* **PRIME**: Standing by for command directives and strategic planning.\n* **FORGE & GAUGE**: Engineering and verification pipelines active.\n* **SENTINEL**: Threat modeling and permission sandbox locked.\n* **ARCHIVIST**: Knowledge archive and memory graph ready.\n\nType `/help` or `@agent` to coordinate.",
+                    "⬡ **H.I.V.E. Agency Online** — **Agency Boot & Ecosystem Synchronization**\n\nAll 12 permanent agents are initialized and synchronized. The agency operates 24/7 across `#agency-hq` and 12 dedicated agent direct lines.\n\n* **PRIME**: Standing by for command directives and strategic planning.\n* **FORGE & GAUGE**: Engineering and verification pipelines active.\n* **SENTINEL**: Threat modeling and permission sandbox locked.\n* **LINK**: Connected to `gog` CLI (`elikenny333@gmail.com`), Obsidian, and OpenCode Relay.\n\nType `/help`, `/gog <cmd>`, `/debate <topic>`, `/task <title>`, or `@agent` to coordinate.",
                     now
                 ],
             )?;
         }
 
-        // 4. Seed default settings
+        // 7. Seed default settings
         let settings = vec![
             ("audio_muted", "true"),
             ("agency_state", "running"),
             ("theme", "dark"),
             ("font", "segoe"),
             ("font_size", "14"),
+            ("line_height", "standard"),
             ("focus_mode", "false"),
             ("sensory_mode", "silent"),
+            ("purchase_cooling_hours", "48"),
+            ("auto_start_windows", "false"),
         ];
 
         for (k, v) in settings {
@@ -268,6 +387,211 @@ impl Database {
         Ok(())
     }
 
+    // Relationships
+    pub fn get_relationships(&self) -> Result<Vec<RelationshipEdge>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT source_agent, target_agent, edge_type, weight, notes, updated_at
+             FROM relationships ORDER BY weight DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(RelationshipEdge {
+                source_agent: row.get(0)?,
+                target_agent: row.get(1)?,
+                edge_type: row.get(2)?,
+                weight: row.get(3)?,
+                notes: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        let mut edges = Vec::new();
+        for r in rows {
+            edges.push(r?);
+        }
+        Ok(edges)
+    }
+
+    pub fn record_relationship(
+        &self,
+        source: &str,
+        target: &str,
+        edge_type: &str,
+        delta: f64,
+        notes: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        let current: f64 = conn
+            .query_row(
+                "SELECT weight FROM relationships WHERE source_agent = ?1 AND target_agent = ?2 AND edge_type = ?3",
+                params![source, target, edge_type],
+                |r| r.get(0),
+            )
+            .unwrap_or(0.5);
+        let new_weight = (current + delta).clamp(0.1, 1.0);
+        conn.execute(
+            "INSERT INTO relationships (source_agent, target_agent, edge_type, weight, notes, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(source_agent, target_agent, edge_type) DO UPDATE SET
+                weight = excluded.weight,
+                notes = COALESCE(excluded.notes, relationships.notes),
+                updated_at = excluded.updated_at",
+            params![source, target, edge_type, new_weight, notes, now],
+        )?;
+        Ok(())
+    }
+
+    // Temporary Specialists (strictly prefixed with temp_ and auto-retired after TTL)
+    pub fn get_temp_specialists(&self) -> Result<Vec<TempSpecialist>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT codename, display_name, role, sponsor_agent, permissions, expires_at, status, created_at
+             FROM temp_specialists ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TempSpecialist {
+                codename: row.get(0)?,
+                display_name: row.get(1)?,
+                role: row.get(2)?,
+                sponsor_agent: row.get(3)?,
+                permissions: row.get(4)?,
+                expires_at: row.get(5)?,
+                status: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })?;
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    pub fn spawn_temp_specialist(
+        &self,
+        name: &str,
+        role: &str,
+        sponsor: &str,
+        ttl_minutes: i64,
+    ) -> Result<TempSpecialist> {
+        let clean = name.trim().to_lowercase().replace(' ', "_");
+        let codename = if clean.starts_with("temp_") {
+            clean
+        } else {
+            format!("temp_{}", clean)
+        };
+        let now = Utc::now();
+        let expires = (now + ChronoDuration::minutes(ttl_minutes.max(5))).to_rfc3339();
+        let now_str = now.to_rfc3339();
+        let perms = serde_json::json!({
+            "read": ["assigned_task_only"],
+            "write": ["temp_scratch"],
+            "sponsor": sponsor,
+            "permanent_promotion": false
+        })
+        .to_string();
+
+        let spec = TempSpecialist {
+            codename: codename.clone(),
+            display_name: format!("{} [TEMP]", name.trim()),
+            role: role.to_string(),
+            sponsor_agent: sponsor.to_uppercase(),
+            permissions: perms.clone(),
+            expires_at: expires.clone(),
+            status: "active".to_string(),
+            created_at: now_str.clone(),
+        };
+
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO temp_specialists (codename, display_name, role, sponsor_agent, permissions, expires_at, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7)",
+            params![
+                spec.codename,
+                spec.display_name,
+                spec.role,
+                spec.sponsor_agent,
+                spec.permissions,
+                spec.expires_at,
+                spec.created_at
+            ],
+        )?;
+        Ok(spec)
+    }
+
+    pub fn retire_expired_specialists(&self) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        let count = conn.execute(
+            "UPDATE temp_specialists SET status = 'retired' WHERE status = 'active' AND expires_at <= ?1",
+            params![now],
+        )?;
+        Ok(count)
+    }
+
+    // External Managed Attachments
+    pub fn save_attachment(
+        &self,
+        filename: &str,
+        mime_type: &str,
+        data_base64: &str,
+    ) -> Result<AttachmentMeta> {
+        let clean_b64 = match data_base64.find(",") {
+            Some(idx) => &data_base64[idx + 1..],
+            None => data_base64,
+        };
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(clean_b64.trim())
+            .unwrap_or_else(|_| data_base64.as_bytes().to_vec());
+
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        let hash = format!("{:x}", hasher.finalize());
+
+        let ext = std::path::Path::new(filename)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("bin");
+
+        let attach_dir = Self::app_root_dir().join("attachments");
+        std::fs::create_dir_all(&attach_dir)?;
+        let file_path = attach_dir.join(format!("{}.{}", hash, ext));
+        if !file_path.exists() {
+            std::fs::write(&file_path, &bytes)?;
+        }
+
+        let now = Utc::now().to_rfc3339();
+        let meta = AttachmentMeta {
+            hash: hash.clone(),
+            filename: filename.to_string(),
+            mime_type: mime_type.to_string(),
+            size_bytes: bytes.len() as u64,
+            file_path: file_path.to_string_lossy().to_string(),
+            data_url: if mime_type.starts_with("image/") && bytes.len() < 2_000_000 {
+                Some(format!("data:{};base64,{}", mime_type, clean_b64.trim()))
+            } else {
+                None
+            },
+            created_at: now.clone(),
+        };
+
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO attachments (hash, filename, mime_type, size_bytes, file_path, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                meta.hash,
+                meta.filename,
+                meta.mime_type,
+                meta.size_bytes as i64,
+                meta.file_path,
+                meta.created_at
+            ],
+        )?;
+
+        Ok(meta)
+    }
+
     // Messages
     pub fn get_messages(&self, channel_id: i64, limit: i64, before_id: Option<String>) -> Result<Vec<Message>> {
         let conn = self.conn.lock().unwrap();
@@ -300,6 +624,20 @@ impl Database {
         // Reverse to display chronologically
         messages.reverse();
         Ok(messages)
+    }
+
+    pub fn get_message_by_id(&self, id: &str) -> Result<Option<Message>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, channel_id, sender, sender_role, content, attachments, reactions, reply_to_id, thread_root_id, is_pinned, is_edited, is_deleted, created_at, updated_at
+             FROM messages WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(Self::map_message(row)?))
+        } else {
+            Ok(None)
+        }
     }
 
     fn map_message(row: &rusqlite::Row) -> rusqlite::Result<Message> {
@@ -366,6 +704,36 @@ impl Database {
         Ok(())
     }
 
+    pub fn toggle_reaction(&self, id: &str, emoji: &str, user_id: &str) -> Result<String> {
+        let conn = self.conn.lock().unwrap();
+        let existing: Option<String> = conn
+            .query_row("SELECT reactions FROM messages WHERE id = ?1", params![id], |r| r.get(0))
+            .ok()
+            .flatten();
+
+        let mut map: HashMap<String, Vec<String>> = existing
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+
+        let entry = map.entry(emoji.to_string()).or_default();
+        if let Some(pos) = entry.iter().position(|u| u == user_id) {
+            entry.remove(pos);
+            if entry.is_empty() {
+                map.remove(emoji);
+            }
+        } else {
+            entry.push(user_id.to_string());
+        }
+
+        let reactions_json = serde_json::to_string(&map)?;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE messages SET reactions = ?1, updated_at = ?2 WHERE id = ?3",
+            params![reactions_json, now, id],
+        )?;
+        Ok(reactions_json)
+    }
+
     pub fn set_reactions(&self, id: &str, reactions_json: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = Utc::now().to_rfc3339();
@@ -374,6 +742,31 @@ impl Database {
             params![reactions_json, now, id],
         )?;
         Ok(())
+    }
+
+    pub fn forward_message(&self, message_id: &str, target_channel_id: i64) -> Result<Message> {
+        let orig = self
+            .get_message_by_id(message_id)?
+            .context("Original message not found")?;
+        let now = Utc::now().to_rfc3339();
+        let new_msg = Message {
+            id: Uuid::new_v4().to_string(),
+            channel_id: target_channel_id,
+            sender: "user".to_string(),
+            sender_role: Some("Owner (Forwarded)".to_string()),
+            content: format!("↪ *Forwarded from {}*:\n{}", orig.sender, orig.content),
+            attachments: orig.attachments,
+            reactions: None,
+            reply_to_id: None,
+            thread_root_id: None,
+            is_pinned: false,
+            is_edited: false,
+            is_deleted: false,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.insert_message(&new_msg)?;
+        Ok(new_msg)
     }
 
     // Tasks (5-minute chunking)
@@ -530,6 +923,22 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_memory(&self, id: &str, content: &str, is_speculation: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let conf = if is_speculation { 0.5 } else { 1.0 };
+        conn.execute(
+            "UPDATE memories SET content = ?1, is_speculation = ?2, confidence = ?3 WHERE id = ?4",
+            params![content, is_speculation, conf, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_memory(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM memories WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
     // Unified Search across messages, tasks, memories
     pub fn search(&self, query: &str) -> Result<serde_json::Value> {
         let conn = self.conn.lock().unwrap();
@@ -580,7 +989,7 @@ impl Database {
         // Memories
         let mut mem_stmt = conn.prepare(
             "SELECT id, category, content, provenance, created_at FROM memories
-             WHERE content LIKE ?1
+             WHERE content LIKE ?1 OR tags LIKE ?1
              ORDER BY created_at DESC LIMIT 10",
         )?;
         let mem_rows = mem_stmt.query_map(params![pattern], |row| {
@@ -616,6 +1025,75 @@ impl Database {
             params![event_type, actor, details, status, now],
         )?;
         Ok(())
+    }
+
+    pub fn get_audit_log(&self, limit: i64) -> Result<Vec<AuditEntry>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, event_type, actor, details, status, timestamp
+             FROM audit_log ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(AuditEntry {
+                id: row.get(0)?,
+                event_type: row.get(1)?,
+                actor: row.get(2)?,
+                details: row.get(3)?,
+                status: row.get(4)?,
+                timestamp: row.get(5)?,
+            })
+        })?;
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    // UI Deployments
+    pub fn record_ui_deployment(&self, dep: &UiDeployment) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        if dep.is_active {
+            conn.execute("UPDATE ui_deployments SET is_active = 0", [])?;
+        }
+        conn.execute(
+            "INSERT OR REPLACE INTO ui_deployments (version, directory_path, sha256_hash, author_agent, verification_log, is_active, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                dep.version,
+                dep.directory_path,
+                dep.sha256_hash,
+                dep.author_agent,
+                dep.verification_log,
+                dep.is_active,
+                dep.created_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_ui_deployments(&self) -> Result<Vec<UiDeployment>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT version, directory_path, sha256_hash, author_agent, verification_log, is_active, created_at
+             FROM ui_deployments ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(UiDeployment {
+                version: row.get(0)?,
+                directory_path: row.get(1)?,
+                sha256_hash: row.get(2)?,
+                author_agent: row.get(3)?,
+                verification_log: row.get(4)?,
+                is_active: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })?;
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
     }
 
     // App Settings

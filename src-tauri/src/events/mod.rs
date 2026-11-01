@@ -10,8 +10,16 @@ pub enum HiveEvent {
         message_id: String,
         channel_id: i64,
         sender: String,
+        sender_role: Option<String>,
         content: String,
         timestamp: String,
+    },
+    #[serde(rename = "agent.typing")]
+    AgentTyping {
+        channel_id: i64,
+        codename: String,
+        activity: String,
+        is_typing: bool,
     },
     #[serde(rename = "agent.status.changed")]
     AgentStatusChanged {
@@ -58,6 +66,12 @@ pub enum HiveEvent {
     AudioMuteToggled {
         is_muted: bool,
     },
+    #[serde(rename = "ui.deployment")]
+    UiDeploymentEvent {
+        version: String,
+        status: String,
+        author_agent: String,
+    },
 }
 
 #[derive(Clone)]
@@ -84,8 +98,18 @@ impl EventBus {
             message_id: message_id.to_string(),
             channel_id,
             sender: sender.to_string(),
+            sender_role: None,
             content: content.to_string(),
             timestamp: Utc::now().to_rfc3339(),
+        });
+    }
+
+    pub fn emit_typing(&self, channel_id: i64, codename: &str, activity: &str, is_typing: bool) {
+        self.publish(HiveEvent::AgentTyping {
+            channel_id,
+            codename: codename.to_string(),
+            activity: activity.to_string(),
+            is_typing,
         });
     }
 }

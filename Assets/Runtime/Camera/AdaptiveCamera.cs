@@ -84,10 +84,10 @@ namespace HIVE.Camera
         private void HandleInput()
         {
             // Mode switching
-            if (Input.GetKeyDown(KeyCode.Alpha1)) SetMode(CameraMode.FirstPerson);
-            if (Input.GetKeyDown(KeyCode.Alpha2)) SetMode(CameraMode.ThirdPerson);
-            if (Input.GetKeyDown(KeyCode.Alpha3)) SetMode(CameraMode.Isometric);
-            if (Input.GetKeyDown(KeyCode.Alpha4)) SetMode(CameraMode.Overview);
+            if (HIVE.Core.HiveInput.GetKeyDown(KeyCode.Alpha1)) SetMode(CameraMode.FirstPerson);
+            if (HIVE.Core.HiveInput.GetKeyDown(KeyCode.Alpha2)) SetMode(CameraMode.ThirdPerson);
+            if (HIVE.Core.HiveInput.GetKeyDown(KeyCode.Alpha3)) SetMode(CameraMode.Isometric);
+            if (HIVE.Core.HiveInput.GetKeyDown(KeyCode.Alpha4)) SetMode(CameraMode.Overview);
 
             // Mode-specific controls
             switch (_currentMode)
@@ -99,7 +99,7 @@ namespace HIVE.Camera
             }
 
             // Universal: focus on selection
-            if (Input.GetKeyDown(KeyCode.F) && !string.IsNullOrEmpty(SelectedAgentId))
+            if (HIVE.Core.HiveInput.GetKeyDown(KeyCode.F) && !string.IsNullOrEmpty(SelectedAgentId))
                 FocusOnAgent(SelectedAgentId);
         }
 
@@ -207,14 +207,14 @@ namespace HIVE.Camera
         private void HandleFPSInput()
         {
             // Mouse look
-            var mouseX = Input.GetAxis("Mouse X") * FPS_LookSpeed;
-            var mouseY = Input.GetAxis("Mouse Y") * FPS_LookSpeed;
+            var mouseX = HIVE.Core.HiveInput.GetAxis("Mouse X") * FPS_LookSpeed;
+            var mouseY = HIVE.Core.HiveInput.GetAxis("Mouse Y") * FPS_LookSpeed;
             _fpsPitch = Mathf.Clamp(_fpsPitch - mouseY, -85f, 85f);
             CameraTransform.localRotation = Quaternion.Euler(_fpsPitch, 0, 0);
             transform.Rotate(Vector3.up * mouseX);
 
             // Movement
-            var input = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+            var input = new Vector3(HIVE.Core.HiveInput.GetAxis("Horizontal"), 0, HIVE.Core.HiveInput.GetAxis("Vertical"));
             var move = transform.TransformDirection(input) * FPS_MoveSpeed;
             _fpsVelocity = Vector3.Lerp(_fpsVelocity, move, Time.deltaTime * 10f);
             transform.position += _fpsVelocity * Time.deltaTime;
@@ -225,11 +225,11 @@ namespace HIVE.Camera
             if (ThirdPersonAvatar == null) return;
 
             // Orbit
-            _ovwRotation += Input.GetAxis("Mouse X") * TPS_RotationSpeed * Time.deltaTime;
-            TPS_Distance = Mathf.Clamp(TPS_Distance - Input.GetAxis("Mouse ScrollWheel") * 5f, 2f, 15f);
+            _ovwRotation += HIVE.Core.HiveInput.GetAxis("Mouse X") * TPS_RotationSpeed * Time.deltaTime;
+            TPS_Distance = Mathf.Clamp(TPS_Distance - HIVE.Core.HiveInput.GetAxis("Mouse ScrollWheel") * 5f, 2f, 15f);
 
             // Avatar movement
-            var input = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+            var input = new Vector3(HIVE.Core.HiveInput.GetAxis("Horizontal"), 0, HIVE.Core.HiveInput.GetAxis("Vertical"));
             if (input.magnitude > 0.1f)
             {
                 var moveDir = Quaternion.Euler(0, _ovwRotation, 0) * input.normalized;
@@ -240,24 +240,24 @@ namespace HIVE.Camera
 
         private void HandleISOInput()
         {
-            _isoRotation += Input.GetAxis("Horizontal") * ISO_RotationSpeed * Time.deltaTime;
-            ISO_Distance = Mathf.Clamp(ISO_Distance - Input.GetAxis("Mouse ScrollWheel") * 10f, 10f, 50f);
+            _isoRotation += HIVE.Core.HiveInput.GetAxis("Horizontal") * ISO_RotationSpeed * Time.deltaTime;
+            ISO_Distance = Mathf.Clamp(ISO_Distance - HIVE.Core.HiveInput.GetAxis("Mouse ScrollWheel") * 10f, 10f, 50f);
 
-            if (Input.GetMouseButton(2)) // Middle mouse pan
+            if (HIVE.Core.HiveInput.GetMouseButton(2)) // Middle mouse pan
             {
-                var pan = new Vector3(-Input.GetAxis("Mouse X"), 0, -Input.GetAxis("Mouse Y")) * ISO_Distance * 0.01f;
+                var pan = new Vector3(-HIVE.Core.HiveInput.GetAxis("Mouse X"), 0, -HIVE.Core.HiveInput.GetAxis("Mouse Y")) * ISO_Distance * 0.01f;
                 _ovwCenter += CameraTransform.TransformDirection(pan);
             }
         }
 
         private void HandleOVWInput()
         {
-            _ovwRotation += Input.GetAxis("Horizontal") * 20f * Time.deltaTime;
-            OVW_Distance = Mathf.Clamp(OVW_Distance - Input.GetAxis("Mouse ScrollWheel") * 20f, OVW_MinDistance, OVW_MaxDistance);
+            _ovwRotation += HIVE.Core.HiveInput.GetAxis("Horizontal") * 20f * Time.deltaTime;
+            OVW_Distance = Mathf.Clamp(OVW_Distance - HIVE.Core.HiveInput.GetAxis("Mouse ScrollWheel") * 20f, OVW_MinDistance, OVW_MaxDistance);
 
-            if (Input.GetMouseButton(2))
+            if (HIVE.Core.HiveInput.GetMouseButton(2))
             {
-                var pan = new Vector3(-Input.GetAxis("Mouse X"), 0, -Input.GetAxis("Mouse Y")) * OVW_Distance * 0.01f;
+                var pan = new Vector3(-HIVE.Core.HiveInput.GetAxis("Mouse X"), 0, -HIVE.Core.HiveInput.GetAxis("Mouse Y")) * OVW_Distance * 0.01f;
                 _ovwCenter += CameraTransform.TransformDirection(pan);
             }
         }

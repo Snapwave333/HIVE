@@ -47,7 +47,16 @@ namespace HIVE.Agents
 
         private async System.Threading.Tasks.Task LoadAgentDefinitions()
         {
-            var path = Path.Combine(Application.dataPath, AgentsPath.Replace("Assets/", ""));
+            await Task.CompletedTask;
+            var path = Path.Combine(Application.streamingAssetsPath, "agents");
+            if (!Directory.Exists(path))
+            {
+                path = Path.Combine(Application.dataPath, "StreamingAssets", "agents");
+            }
+            if (!Directory.Exists(path))
+            {
+                path = Path.Combine(Application.dataPath, AgentsPath.Replace("Assets/", ""));
+            }
             if (!Directory.Exists(path))
             {
                 Debug.LogError($"[AgentSpawner] Agents path not found: {path}");
@@ -175,13 +184,26 @@ namespace HIVE.Agents
             MessageBus.Publish(response);
         }
 
+        private float _lastHeartbeatTime;
+        private const float HeartbeatInterval = 5f;
+
         private void Update()
         {
+            if (Time.time - _lastHeartbeatTime < HeartbeatInterval) return;
+            _lastHeartbeatTime = Time.time;
+
+            if (_repository == null || _agents == null) return;
+
             // Heartbeat
             foreach (var instance in _agents.Values)
             {
+                if (instance?.State == null || instance.Definition == null) continue;
                 instance.State.LastHeartbeat = DateTime.UtcNow;
-                _repository.UpdateAgentState(instance.Definition.Codename, instance.State);
+                try
+                {
+                    _repository.UpdateAgentState(instance.Definition.Codename, instance.State);
+                }
+                catch { }
             }
         }
 

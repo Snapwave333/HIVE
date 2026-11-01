@@ -28,13 +28,46 @@ pub struct Agent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelationshipEdge {
+    pub source_agent: String,
+    pub target_agent: String,
+    pub edge_type: String, // "collaborated" | "handed_off" | "disagreed" | "mentored"
+    pub weight: f64,
+    pub notes: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TempSpecialist {
+    pub codename: String, // must start with "temp_"
+    pub display_name: String,
+    pub role: String,
+    pub sponsor_agent: String,
+    pub permissions: String,
+    pub expires_at: String,
+    pub status: String, // "active" | "retired"
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentMeta {
+    pub hash: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
+    pub file_path: String,
+    pub data_url: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub id: String,
     pub channel_id: i64,
     pub sender: String,
     pub sender_role: Option<String>,
     pub content: String,
-    pub attachments: Option<String>, // JSON array of attachment metadata
+    pub attachments: Option<String>, // JSON array of AttachmentMeta
     pub reactions: Option<String>,   // JSON object: { "emoji": ["user", "PRIME"] }
     pub reply_to_id: Option<String>,
     pub thread_root_id: Option<String>,

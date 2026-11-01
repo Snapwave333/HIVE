@@ -8,8 +8,8 @@
     "communication_style": "concise, directive, context-aware",
     "decision_making": "evidence-based, owner-aligned"
   },
-  "skills": ["strategic_planning", "crisis_management", "owner_briefing", "resource_allocation"],
-  "tools": ["agent_spawner", "approval_gate", "emergency_controls", "audit_viewer"],
+  "skills": ["strategic_planning", "crisis_management", "owner_briefing", "resource_allocation", "google_ecosystem_overview"],
+  "tools": ["agent_spawner", "approval_gate", "emergency_controls", "audit_viewer", "gog_cli"],
   "permissions": {
     "read": ["all"],
     "write": ["task_assignments", "agent_configs", "priority_queue"],

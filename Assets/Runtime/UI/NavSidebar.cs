@@ -52,21 +52,24 @@ namespace HIVE.UI
             if (UIDocument != null)
             {
                 _root = UIDocument.rootVisualElement;
-                if (SidebarTemplate != null)
+                if (SidebarTemplate != null && _root != null)
                     SidebarTemplate.CloneTree(_root);
 
-                _sidebar = _root.Q<VisualElement>("sidebar");
-                _searchField = _root.Q<TextField>("search-field");
-                _navList = _root.Q<ListView>("nav-list");
-                _searchResults = _root.Q<ListView>("search-results");
-                _searchResultsContainer = _root.Q<VisualElement>("search-results-container");
-                _toggleButton = _root.Q<Button>("toggle-button");
-                _agentCountLabel = _root.Q<Label>("agent-count");
-                _taskCountLabel = _root.Q<Label>("task-count");
-                _alertCountLabel = _root.Q<Label>("alert-count");
+                if (_root != null)
+                {
+                    _sidebar = _root.Q<VisualElement>("sidebar");
+                    _searchField = _root.Q<TextField>("search-field");
+                    _navList = _root.Q<ListView>("nav-list");
+                    _searchResults = _root.Q<ListView>("search-results");
+                    _searchResultsContainer = _root.Q<VisualElement>("search-results-container");
+                    _toggleButton = _root.Q<Button>("toggle-button");
+                    _agentCountLabel = _root.Q<Label>("agent-count");
+                    _taskCountLabel = _root.Q<Label>("task-count");
+                    _alertCountLabel = _root.Q<Label>("alert-count");
 
-                SetupSections();
-                SetupUI();
+                    SetupSections();
+                    SetupUI();
+                }
             }
         }
 
@@ -114,7 +117,7 @@ namespace HIVE.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(ToggleKey))
+            if (HIVE.Core.HiveInput.GetKeyDown(ToggleKey))
                 ToggleSidebar();
         }
 

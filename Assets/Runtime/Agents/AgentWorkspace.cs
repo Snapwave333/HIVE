@@ -60,6 +60,8 @@ namespace HIVE.Agents
             if (UIDocument == null) UIDocument = GetComponent<UIDocument>();
             if (UIDocument == null) return;
             _root = UIDocument.rootVisualElement;
+            if (_root == null) return;
+
             if (WorkspaceTemplate != null)
                 WorkspaceTemplate.CloneTree(_root);
 
@@ -72,23 +74,29 @@ namespace HIVE.Agents
             _hologramContainer = _root.Q<VisualElement>("hologram-container");
             _networkConnections = _root.Q<VisualElement>("network-connections");
 
-            _nameLabel.text = Definition.DisplayName;
-            _roleLabel.text = Definition.Role;
-            _statusLabel.text = _instance?.State.Status ?? "Initializing";
+            if (_nameLabel != null) _nameLabel.text = Definition?.DisplayName ?? "";
+            if (_roleLabel != null) _roleLabel.text = Definition?.Role ?? "";
+            if (_statusLabel != null) _statusLabel.text = _instance?.State?.Status ?? "Initializing";
 
-            _chatButton.clicked += OpenChat;
+            if (_chatButton != null) _chatButton.clicked += OpenChat;
 
-            _taskList.makeItem = () => new Label();
-            _taskList.bindItem = (e, i) =>
+            if (_taskList != null)
             {
-                var task = _activeTasks[i];
-                if (e is Label lbl)
+                _taskList.makeItem = () => new Label();
+                _taskList.bindItem = (e, i) =>
                 {
-                    lbl.text = $"[{task.State}] {task.Title}";
-                    lbl.tooltip = task.Description;
-                }
-            };
-            _taskList.itemsSource = _activeTasks;
+                    if (i < _activeTasks.Count)
+                    {
+                        var task = _activeTasks[i];
+                        if (e is Label lbl)
+                        {
+                            lbl.text = $"[{task.State}] {task.Title}";
+                            lbl.tooltip = task.Description;
+                        }
+                    }
+                };
+                _taskList.itemsSource = _activeTasks;
+            }
         }
 
         private void SpawnAvatar()
@@ -128,11 +136,11 @@ namespace HIVE.Agents
         {
             if (_instance == null) return;
 
-            _statusLabel.text = _instance.State.Status;
-            _currentTaskLabel.text = _instance.State.CurrentTask ?? "None";
+            if (_statusLabel != null) _statusLabel.text = _instance.State?.Status ?? "Available";
+            if (_currentTaskLabel != null) _currentTaskLabel.text = _instance.State?.CurrentTask ?? "None";
 
             // Update task list from TaskManager
-            if (TaskManager.Instance != null)
+            if (TaskManager.Instance != null && _taskList != null)
             {
                 var tasks = TaskManager.Instance.GetTasks(assignee: Definition.Codename);
                 _activeTasks.Clear();

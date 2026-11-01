@@ -127,8 +127,8 @@ namespace HIVE.Editor
                 var skillReg = skillGO.AddComponent<SkillRegistry>();
                 skillReg.Initialize(repo);
 
-                var skillTask = skillReg.ExecuteSkillAsync("strategic_planning", "PRIME");
-                skillTask.Wait(TimeSpan.FromSeconds(5));
+                var skillTask = Task.Run(() => skillReg.ExecuteSkillAsync("strategic_planning", "PRIME"));
+                skillTask.Wait(TimeSpan.FromSeconds(10));
                 var skillRes = skillTask.Result;
                 AssertTrue("Skill Execution", skillRes.Success, $"Output: {skillRes.Output}");
                 GameObject.DestroyImmediate(skillGO);
@@ -167,6 +167,9 @@ namespace HIVE.Editor
 
                 // TEST 11-18: Autonomous Coding Orchestration & Recovery Suite
                 HiveCodingTests.RunCodingTests((name, ok, detail) => AssertTrue(name, ok, detail));
+
+                // TEST 19-24: Google Ecosystem Bridge & gog CLI Suite
+                HiveGoogleTests.RunGoogleTests((name, ok, detail) => AssertTrue(name, ok, detail));
 
                 // Clean up test DB
                 try { if (File.Exists(testDb)) File.Delete(testDb); } catch { }

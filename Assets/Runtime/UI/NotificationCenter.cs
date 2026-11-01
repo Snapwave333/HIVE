@@ -39,7 +39,7 @@ namespace HIVE.UI
         private void Awake()
         {
             var doc = GetComponent<UIDocument>();
-            if (doc != null)
+            if (doc != null && doc.rootVisualElement != null)
             {
                 _toastContainer = doc.rootVisualElement.Q<VisualElement>("toast-container");
                 _historyPanel = doc.rootVisualElement.Q<VisualElement>("history-panel");
@@ -48,7 +48,7 @@ namespace HIVE.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(HistoryKey))
+            if (HIVE.Core.HiveInput.GetKeyDown(HistoryKey))
                 ToggleHistory();
         }
 
