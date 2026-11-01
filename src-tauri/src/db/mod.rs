@@ -815,6 +815,23 @@ impl Database {
         Ok(messages)
     }
 
+    pub fn get_latest_per_channel(&self) -> Result<Vec<Message>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, channel_id, sender, sender_role, content, attachments, reactions, reply_to_id, thread_root_id, is_pinned, is_edited, is_deleted, created_at, updated_at
+             FROM (
+                SELECT m.*, ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY created_at DESC) AS rn
+                FROM messages m WHERE is_deleted = 0
+             ) WHERE rn = 1",
+        )?;
+        let rows = stmt.query_map([], Self::map_message)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
     pub fn get_message_by_id(&self, id: &str) -> Result<Option<Message>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(

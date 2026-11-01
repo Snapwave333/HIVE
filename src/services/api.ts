@@ -48,6 +48,7 @@ export const api = {
       data_base64: base64Data,
     }),
   getAttachment: (hash: string) => tauriInvoke<AttachmentRecord>("get_attachment", { hash }),
+  getChannelPreviews: () => tauriInvoke<Message[]>("get_channel_previews"),
   markChannelRead: (channelId: number) => tauriInvoke<void>("mark_channel_read", { channel_id: channelId }),
   getUnreadCounts: () => tauriInvoke<Record<string, number>>("get_unread_counts"),
   getTasks: (statusFilter?: string) =>

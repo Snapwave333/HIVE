@@ -551,3 +551,26 @@ fn exports_are_readable_markdown_without_deleted_messages() {
     assert!(md.contains("📎 log.txt (2 KB)"));
     assert!(!md.contains("oops"));
 }
+
+#[test]
+fn channel_previews_return_the_latest_live_message_per_channel() {
+    let db = Database::new_in_memory().unwrap();
+    let mut old = msg("FORGE", "older");
+    old.channel_id = 3;
+    old.created_at = "2026-11-01T08:00:00+00:00".to_string();
+    let mut newer = msg("FORGE", "newer");
+    newer.channel_id = 3;
+    newer.created_at = "2026-11-01T09:00:00+00:00".to_string();
+    let mut newest_deleted = msg("user", "deleted");
+    newest_deleted.channel_id = 3;
+    newest_deleted.created_at = "2026-11-01T10:00:00+00:00".to_string();
+    newest_deleted.is_deleted = true;
+    for m in [&old, &newer, &newest_deleted] {
+        db.insert_message(m).unwrap();
+    }
+    let previews = db.get_latest_per_channel().unwrap();
+    let ch3: Vec<_> = previews.iter().filter(|m| m.channel_id == 3).collect();
+    assert_eq!(ch3.len(), 1);
+    assert_eq!(ch3[0].content, "newer");
+    assert!(previews.iter().any(|m| m.channel_id == 0), "the welcome message previews #agency-hq");
+}

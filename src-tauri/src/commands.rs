@@ -184,6 +184,11 @@ pub fn get_attachment(hash: String, state: State<'_, AppState>) -> Result<Attach
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub fn get_channel_previews(state: State<'_, AppState>) -> Result<Vec<Message>, String> {
+    state.db.get_latest_per_channel().map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub fn mark_channel_read(channel_id: i64, state: State<'_, AppState>) -> Result<(), String> {
     state.db.mark_channel_read(channel_id).map_err(|e| e.to_string())
 }

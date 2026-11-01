@@ -127,18 +127,11 @@ export const App: React.FC = () => {
         const parsedSize = Number(size);
         if (parsedSize >= FONT_SIZE_MIN && parsedSize <= FONT_SIZE_MAX) setFontSize(parsedSize);
 
-        const previews = await Promise.all(
-          chList.map((c) =>
-            api
-              .getMessages(c.id, 1)
-              .then((m) => [c.id, m[m.length - 1]] as const)
-              .catch(() => [c.id, undefined] as const)
-          )
-        );
+        const previews = await api.getChannelPreviews().catch(() => [] as Message[]);
         if (cancelled) return;
         setLatestMessages((prev) => {
           const next = { ...prev };
-          for (const [id, m] of previews) if (m && !next[id]) next[id] = m;
+          for (const m of previews) if (!next[m.channel_id]) next[m.channel_id] = m;
           return next;
         });
       } catch (err) {

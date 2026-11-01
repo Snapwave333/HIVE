@@ -932,6 +932,7 @@ pub fn run() {
             commands::upload_attachment,
             commands::get_attachment,
             commands::mark_channel_read,
+            commands::get_channel_previews,
             commands::get_unread_counts,
             commands::get_tasks,
             commands::create_task,
