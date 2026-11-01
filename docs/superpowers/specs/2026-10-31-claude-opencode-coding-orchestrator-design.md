@@ -1,18 +1,20 @@
 # Technical Specification: Claude Code + OpenCode Autonomous Development System
 
-**Document Version:** 1.0.0  
+**Document Version:** 1.1.0 (Authoritative & Verified)  
 **Date:** 2026-10-31  
 **Author:** Snapwave//Lushapps (Pair Programmed with Antigravity)  
-**Status:** Approved  
+**Status:** Approved for Implementation  
 **Target Environment:** Unity 6000.6.7f1 LTS (URP) / .NET Standard 2.1 / Windows 64-bit  
 
 ---
 
 ## 1. Executive Summary & Objective
 
-The **Claude Code + OpenCode Autonomous Development System** establishes a dedicated, enterprise-grade Coding Orchestration Layer for the 12 permanent agents of H.I.V.E. It enables the agency to autonomously inspect, debug, optimize, test, document, and extend its own source code and assets.
+The **Claude Code + OpenCode Autonomous Development System** establishes a dedicated, enterprise-grade Coding Orchestration Layer for the 12 permanent agents of H.I.V.E. It enables the agency to autonomously inspect, debug, optimize, test, document, and extend its own source code, skills, and assets.
 
-The system uses **Claude Code CLI** as its primary development engine and **OpenCode CLI** as its automatic free fallback. It enforces a strict **Tiered Autonomy Deployment Policy** backed by an **Out-of-Process Recovery Supervisor** running independently of Unity. Crucially, the recovery mechanism operates outside the agency's self-modifying boundary: H.I.V.E. can modify its application code without ever destroying or compromising its ability to restore known-good states.
+The system employs **Claude Code CLI** as its primary development engine and **OpenCode CLI** as its automatic free fallback. It enforces a strict **Tiered Autonomy Deployment Policy** backed by an **Out-of-Process Recovery Supervisor** running independently of Unity in standalone Python.
+
+Crucially, the recovery mechanism operates strictly outside the agency's self-modifying boundary: H.I.V.E. can rewrite its own application, coding adapters, agent skills, and orchestration systems, but cannot rewrite, compromise, or disable the mechanism that independently protects and restores those systems.
 
 ---
 
@@ -23,7 +25,7 @@ The architecture maintains an absolute separation of concerns across two distinc
 ```mermaid
 flowchart TD
     subgraph UnityRuntimePlane ["Unity Runtime Engine (Assets/Runtime/Coding/)"]
-        Agents["12 H.I.V.E. Agents (PRIME, FORGE, SENTINEL, etc.)"] -->|ICodingOrchestrator| Orchestrator["CodingOrchestrator"]
+        Agents["12 H.I.V.E. Agents (PRIME, FORGE, SENTINEL, GAUGE, etc.)"] -->|ICodingOrchestrator| Orchestrator["CodingOrchestrator"]
         Orchestrator --> Router["CodingTaskRouter"]
         Router --> Claude["ClaudeCodeAdapter (Primary)"]
         Router --> OpenCode["OpenCodeAdapter (Fallback)"]
@@ -35,14 +37,14 @@ flowchart TD
     end
 
     subgraph ExternalRecoveryPlane ["Independent Out-of-Process Supervisor (scripts/recovery/)"]
-        Supervisor["hive_recovery.py (Standalone Python / CLI)"]
-        TxStore[".hive/recovery/transactions/ (Atomic WAL Journal)"]
-        Checkpoints[".hive/recovery/checkpoints/ (Immutable Commit Records)"]
+        Supervisor["hive_recovery.py (Standalone Python Daemon & CLI)"]
+        TxStore[".hive/recovery/transactions/ (Atomic WAL Journal with SHA-256)"]
+        Checkpoints[".hive/recovery/checkpoints/ (Immutable Ref Manifests)"]
         Worktrees[".hive/worktrees/ (Isolated Git Worktrees)"]
-        Watchdog["Crash & Process Watchdog"]
+        Watchdog["Crash, Orphan & Windows Job Object Watchdog"]
     end
 
-    DeployMgr <-->|Atomic JSON Transaction IPC| Supervisor
+    DeployMgr <-->|Atomic Transaction IPC & Manifests| Supervisor
     Supervisor --> Worktrees
     Supervisor --> TxStore
     Supervisor --> Checkpoints
@@ -52,28 +54,28 @@ flowchart TD
 
 | Component | Execution Plane | Responsibilities |
 | :--- | :--- | :--- |
-| `ICodingOrchestrator` / `CodingOrchestrator` | Unity Runtime | Unified entry point for all 12 agents; task queueing, state persistence, lifecycle management. |
-| `CodingTaskRouter` | Unity Runtime | Evaluates provider availability, dispatches tasks, manages mid-task context handoff on failover. |
-| `ClaudeCodeAdapter` | Unity Runtime | Wraps `claude.exe` CLI; streams stdout, extracts structured JSON telemetry, classifies exits. |
-| `OpenCodeAdapter` | Unity Runtime | Wraps `opencode` CLI; handles free model selection and prompt translation. |
+| `ICodingOrchestrator` / `CodingOrchestrator` | Unity Runtime | Unified entry point for all 12 agents; task queueing, state persistence, lifecycle management, task resumption. |
+| `CodingTaskRouter` | Unity Runtime | Evaluates provider availability, dispatches tasks, manages clean mid-task context handoff on failover. |
+| `ClaudeCodeAdapter` | Unity Runtime | Wraps `claude.exe` CLI; streams stdout, extracts structured JSON telemetry, classifies exits and rate limits. |
+| `OpenCodeAdapter` | Unity Runtime | Wraps `opencode` CLI; selects verified free models under configured policy; handles prompt translation. |
 | `ProviderHealthMonitor` | Unity Runtime | Tracks provider states: `Available`, `Unavailable`, `RateLimited`, `AuthFailed`, `UsageExhausted`, `Recovering`, `Disabled`. Distinguishes temporary vs permanent faults. |
 | `UsageTracker` & `CostEstimator` | Unity Runtime | Tracks input, output, cached tokens, and USD costs. Strictly separates measured telemetry from heuristic estimates. |
 | `TieredDeploymentManager` | Unity Runtime | Evaluates touched paths; classifies transactions into Tier 1 (Auto), Tier 2 (Owner Gated), or Tier 3 (Prohibited). |
 | `CodingAuditLogger` | Unity Runtime | Streams audit records to `MessageBus`, `Repository`, and immutable local logs. |
-| `hive_recovery.py` / `hive_recovery.cmd` | External Supervisor | Independent Python script. Creates isolated Git worktrees, records SHA-256 manifests, executes two-phase atomic deployments, monitors crashes, and guarantees rollback without depending on Unity. |
+| `hive_recovery.py` / `hive_recovery.cmd` | External Supervisor | Independent Python script and Windows background watchdog. Creates isolated Git worktrees, records SHA-256 manifests, executes atomic compare-and-swap ref updates, monitors process trees via Windows Job Objects, and guarantees rollback without depending on Unity. |
 
 ---
 
 ## 3. Tiered Autonomy Deployment Policy
 
-The system classifies every modification based on a strict **fail-closed** path policy. If any touched file belongs to a higher tier, the entire transaction is elevated.
+The system classifies every modification based on a strict **fail-closed** path policy. The recovery supervisor independently calculates path classifications from `git diff-tree` and canonical filesystem resolution (symlink and traversal safe) — it never trusts the caller's claimed tier.
 
 ### 3.1 Policy Matrix
 
 | Tier | Name | Target Paths & Criteria | Deployment Rules |
 | :--- | :--- | :--- | :--- |
-| **Tier 1** | **Autonomous Deployment** | • `Assets/Runtime/UI/Styles/**`<br>• `Assets/Runtime/Skills/**` (non-privileged)<br>• `Assets/Runtime/Voice/**`<br>• `docs/**`<br>• `README.md`<br>• `tests/**` (routine unit fixtures) | Auto-merges and deploys only when:<br>1. Isolated worktree tests pass 100%.<br>2. Dynamic baseline test count is matched/exceeded.<br>3. Static security diff check passes.<br>4. Deployment health checks succeed. |
-| **Tier 2** | **Owner Approval Required** | • `Assets/Runtime/Core/**`<br>• `Assets/Runtime/Coding/**`<br>• `Assets/Runtime/Security/**`<br>• `Assets/Runtime/Persistence/**`<br>• `Assets/Runtime/LLM/**`<br>• `Assets/Scenes/**`<br>• `ProjectSettings/**`<br>• `Packages/manifest.json`<br>• `.github/workflows/**`<br>• Agent permission schemas<br>• *Any unknown or unclassified path* | 1. Prepared in isolated worktree.<br>2. Tests pass and diff report is generated.<br>3. Transaction is placed in `STAGED_AWAITING_APPROVAL`.<br>4. Requires explicit Owner authorization via Owner Control chamber UI or CLI (`hive approve <txId>`). |
+| **Tier 1** | **Autonomous Deployment** | • `Assets/Runtime/UI/Styles/**`<br>• `Assets/Runtime/Skills/**` (non-privileged)<br>• `Assets/Runtime/Voice/**`<br>• `docs/**`<br>• `README.md`<br>• `tests/**` (routine unit fixtures) | Auto-merges and deploys only when:<br>1. Isolated worktree tests pass 100%.<br>2. Explicit baseline test inventory is matched (no skipped/disabled tests).<br>3. Static security diff check passes (SENTINEL).<br>4. Deployment health checks succeed. |
+| **Tier 2** | **Owner Approval Required** | • `Assets/Runtime/Core/**`<br>• `Assets/Runtime/Coding/**`<br>• `Assets/Runtime/Security/**`<br>• `Assets/Runtime/Persistence/**`<br>• `Assets/Runtime/LLM/**`<br>• `Assets/Scenes/**`<br>• `ProjectSettings/**`<br>• `Packages/manifest.json`<br>• `.github/workflows/**`<br>• Agent permission schemas<br>• *Any unknown or unclassified path* | 1. Prepared in isolated worktree.<br>2. Tests pass and diff report is generated.<br>3. Transaction placed in `STAGED_AWAITING_APPROVAL`.<br>4. **Owner-Only Authorization**: Requires explicit Owner signature bound to the exact `txId`, candidate commit hash, and manifest SHA-256. PRIME or other agents cannot authorize deployment. |
 | **Tier 3** | **Prohibited from Self-Modification** | • `scripts/recovery/**`<br>• `.hive/recovery/**`<br>• Emergency rollback mechanisms<br>• Direct removal of Owner controls or audit logs | Hard rejection by recovery supervisor. Agents cannot modify or deploy these files. Only the Owner can perform manual maintenance on recovery infrastructure. |
 
 ---
@@ -94,7 +96,7 @@ stateDiagram-v2
         ExecutingClaude --> ContextPreserve: Process Crash / Mid-Task Rate Limit
     }
 
-    ContextPreserve --> CheckOpenCode: Pass Task ID, Worktree State, Partial Diff
+    ContextPreserve --> CheckOpenCode: Terminate Process Tree, Pass Task ID, Worktree State, Partial Diff
     
     state CheckOpenCode {
         [*] --> ExecutingOpenCode
@@ -105,15 +107,16 @@ stateDiagram-v2
     QueueAndRetry --> CheckClaude: Exponential Backoff (5m, 15m, 30m with jitter)
 ```
 
-### 4.2 Failover & Context Preservation Rules
-1. **Isolated Worktree Ownership**: All changes are written directly into an isolated worktree (`.hive/worktrees/<txId>`).
-2. **Graceful Process Termination**: Before failing over from Claude Code to OpenCode, the failed process is cleanly terminated and isolated to ensure no concurrent modification of the same worktree.
-3. **Context Injection**: When invoking OpenCode after a partial Claude Code attempt, OpenCode is supplied with:
+### 4.2 Failover, Concurrency & Context Preservation Rules
+1. **Windows Job Objects & Process Tree Termination**: Whenever a provider process times out, crashes, or is cancelled, its entire process tree is terminated cleanly via Windows Job Objects to prevent orphaned subprocesses or file locks on the worktree.
+2. **Concurrency Invariant**: Exactly one active writer per worktree. The supervisor enforces an on-disk lock (`.hive/worktrees/<txId>/.lock`) that prevents simultaneous writes.
+3. **Context Injection**: When invoking OpenCode after a partial Claude Code attempt, OpenCode receives:
    - Original task objective and constraints.
-   - Summary of completed sub-actions.
+   - Summary of completed work.
    - Current Git diff of the worktree.
    - Any compiler or test errors encountered.
-4. **Token & Telemetry Hierarchy**:
+4. **Model Policy Enforcement**: OpenCode adapter verifies that its selected model is explicitly verified as free under agency policy. It will never silently fall back to a paid provider.
+5. **Token & Telemetry Hierarchy**:
    - Level 1: Exact provider telemetry (API metadata / CLI structured JSON).
    - Level 2: CLI-reported token summaries.
    - Level 3: Model-specific BPE tokenizer.
@@ -124,7 +127,7 @@ stateDiagram-v2
 
 ## 5. Safe Change Protocol & Out-of-Process Recovery Supervisor
 
-### 5.1 Two-Phase Transactional Deployment
+### 5.1 Two-Phase Transactional Deployment with Compare-and-Swap Rollback
 
 Every modification follows a two-phase transactional lifecycle managed by `hive_recovery.py`:
 
@@ -143,30 +146,35 @@ sequenceDiagram
     Engine->>Engine: Run Claude Code / OpenCode in Worktree
     Engine->>Engine: Run Unit Tests & Diff Checks
     Engine->>Supervisor: ProposeDeployment(txId, manifest)
-    Supervisor->>Supervisor: Verify Hashes, Tier Classification, and Security Checks
+    Supervisor->>Supervisor: Independently Verify Hashes, Paths, Tier Classification, and Security Checks
 
     Note over Supervisor: Phase 2: Commit
-    Supervisor->>Git: Fast-Forward / Merge to Target Branch
+    Supervisor->>Git: Controlled Ref Update (Compare-and-Swap to Target Ref)
     Supervisor->>App: Run Post-Deployment Health Check
     alt Health Check Passes
         Supervisor->>Supervisor: Mark COMMITTED in Journal
         Supervisor-->>Engine: Deployment Verified & Complete
     else Health Check Fails
-        Supervisor->>Git: Restore Target Branch to Pre-Merge Checkpoint
-        Supervisor->>Supervisor: Quarantine Worktree (.hive/quarantine/<txId>)
-        Supervisor->>Supervisor: Mark ROLLED_BACK in Journal
-        Supervisor-->>Engine: Deployment Aborted & Rolled Back
+        Supervisor->>Git: Verify Target Ref Still Equals Deployed Commit
+        alt Ref Ownership Verified
+            Supervisor->>Git: Atomic Ref Revert to Pre-Merge Checkpoint
+            Supervisor->>Supervisor: Quarantine Worktree (.hive/quarantine/<txId>)
+            Supervisor->>Supervisor: Mark ROLLED_BACK in Journal
+            Supervisor-->>Engine: Deployment Aborted & Safely Rolled Back
+        else Ref Changed by External User/Process
+            Supervisor->>Supervisor: Quarantine & Halt (Escalate to Owner for Reconciliation)
+        end
     end
 ```
 
 ### 5.2 Transaction Journal Disk Schema (`.hive/recovery/transactions/<txId>.json`)
 
-Transactions use write-ahead logging (WAL) via temporary files and atomic replacements:
+Transactions use write-ahead logging (WAL) via temporary files, atomic replacements, and SHA-256 checksums:
 
 ```json
 {
   "txId": "tx-20261031-1850-forge-001",
-  "version": "1.0",
+  "version": "1.1",
   "agent": "FORGE",
   "status": "COMMITTED",
   "createdAt": "2026-10-31T18:50:30Z",
@@ -187,14 +195,15 @@ Transactions use write-ahead logging (WAL) via temporary files and atomic replac
   },
   "tierClassification": {
     "tier": 1,
+    "supervisorCalculatedTier": 1,
     "reason": "Non-sensitive UI layout and skill script updates",
     "touchedFiles": [
       "Assets/Runtime/UI/Styles/HiveHUD.uss"
     ]
   },
   "verification": {
-    "baselineTestCount": 16,
-    "worktreeTestCount": 16,
+    "baselineTestInventory": ["RepoInit", "SchemaValidation", "SecurityGateRBAC", "..."],
+    "candidateTestInventory": ["RepoInit", "SchemaValidation", "SecurityGateRBAC", "..."],
     "testsPassed": true,
     "diffSafetyPassed": true,
     "postDeploymentHealthPassed": true
@@ -202,24 +211,25 @@ Transactions use write-ahead logging (WAL) via temporary files and atomic replac
   "approval": {
     "required": false,
     "authorizedBy": "AUTONOMOUS_POLICY",
+    "ownerSignature": null,
     "timestamp": "2026-10-31T18:52:00Z"
   }
 }
 ```
 
 ### 5.3 Working-Tree Safety & Uncommitted User Change Protection
-1. **Never Blindly Reset**: The supervisor captures `git status --porcelain` before creating any worktree.
-2. **Worktree Isolation**: Coding CLIs operate exclusively inside `.hive/worktrees/<txId>/`. The main working tree is never touched during task execution.
-3. **Reconciliation**: If uncommitted user modifications exist on the target branch at deployment time, the supervisor refuses to fast-forward automatically, alerts the Owner, and keeps the candidate staged in the worktree.
+1. **Never Blindly Reset**: The supervisor captures working-tree state before creating any worktree. Unconditional `git reset --hard` is strictly prohibited.
+2. **Controlled Git Ref Updates**: Deployments use `git update-ref` with old and new SHA arguments (compare-and-swap). If an external user commit has moved the ref, the deployment or rollback halts and preserves both branches without data loss.
+3. **Quarantine Retention Policy**: Worktrees from failed deployments are moved to `.hive/quarantine/<txId>/` and retained for Owner inspection.
 
-### 5.4 Independent Crash Watchdog
-- `hive_recovery.py watchdog` runs as an independent daemon or CLI check during `hive doctor` and boot.
-- It scans `.hive/recovery/transactions/` for transactions in `STAGED`, `VALIDATING`, or `DEPLOYING` states without a `COMMITTED` marker.
-- It inspects the actual Git ref log, terminates orphaned CLI processes, and if a broken merge occurred, restores the branch to `baselineCommit` while preserving user changes and moving failed worktrees to `.hive/quarantine/`.
+### 5.4 Independent Continuous Watchdog
+- `hive_recovery.py watchdog` runs as an independent Windows background service/process.
+- It performs heartbeat logging, process tree monitoring, orphan cleanup, and recovery readiness checks.
+- If Unity crashes mid-transaction, the watchdog detects the severed heartbeat, verifies Git ref consistency, and safely reconciles the transaction journal without human intervention.
 
 ---
 
-## 6. Detailed C# Runtime Architecture
+## 6. Detailed C# Runtime Architecture (.NET Standard 2.1 Compatible)
 
 ```text
 Assets/Runtime/Coding/
@@ -260,11 +270,12 @@ scripts/recovery/
 
 ### 6.1 Role-Based Responsibilities of the 12 Agents
 
-All 12 agents share `ICodingOrchestrator`, but their permissions and operational roles remain strictly defined by their agent schemas and `SecurityGate`:
-- **PRIME**: Reviews Tier 2 proposals; authorizes deployment escalations.
+All 12 agents share `ICodingOrchestrator`, but their permissions and operational roles remain strictly enforced:
+- **PRIME**: Reviews Tier 2 proposals; can recommend deployment to the Owner, but **cannot self-authorize**.
+- **OWNER**: Only the authenticated human Owner holds authorization credentials to execute `hive approve <txId>` for Tier 2 deployments.
 - **FORGE**: Primary author of code, bug fixes, refactoring, and build tooling.
-- **SENTINEL**: Performs mandatory static diff security audits, credential leak scans, and permission boundary validation.
-- **GAUGE**: Runs unit test verification, regression suite benchmarks, and test fixture authoring.
+- **SENTINEL**: Independent static diff security audits, credential leak scans, and permission boundary validation.
+- **GAUGE**: Unit test verification, test inventory comparison, regression suite benchmarks, and test fixture authoring.
 - **SAGE / ARCHIVIST**: Generates documentation updates and indexes code patterns into `MemoryStore`.
 - **SPARK**: Prototypes experimental modules in isolated worktrees.
 - **CONDUCTOR**: Schedules and prioritizes coding task queues.
@@ -276,19 +287,19 @@ All 12 agents share `ICodingOrchestrator`, but their permissions and operational
 
 1. **Adapter Execution**:
    - `ClaudeCodeAdapter` executes tasks against `claude.exe`, capturing streaming logs and structured usage.
-   - `OpenCodeAdapter` executes tasks against `opencode`, providing verified free fallback.
+   - `OpenCodeAdapter` executes tasks against `opencode` with verified free model validation.
 2. **Resilient Failover**:
-   - Simulating rate-limits or offline states on Claude Code automatically transitions task execution to OpenCode without loss of worktree progress.
+   - Simulating rate-limits or offline states on Claude Code cleanly terminates the process tree via Windows Job Objects and transitions task execution to OpenCode without loss of worktree progress.
 3. **Supervisor Isolation**:
    - `hive_recovery.py` runs independently from terminal/batchmode; creates isolated worktrees and logs atomic WAL journals.
-4. **Tiered Policy Enforcement**:
-   - Tier 1 modifications merge autonomously upon 100% test pass.
-   - Tier 2 modifications enter `STAGED_AWAITING_APPROVAL`.
-   - Tier 3 modifications are hard-rejected.
-5. **Rollback & Health Check**:
-   - Inducing an intentional build/test failure in a candidate worktree triggers an automatic rollback with zero impact on the master branch.
-6. **E2E Integration Suite**:
-   - Full test suite via `hive.cmd test` passes with zero regressions.
+4. **Independent Tier 3 Enforcement**:
+   - The supervisor independently recalculates path classifications from Git refs and hard-rejects any attempt to modify recovery files.
+5. **Compare-and-Swap Rollback**:
+   - Verifies target ref before and after deployment; rolls back safely without `git reset --hard` and quarantines failed worktrees.
+6. **Dynamic Test Inventory**:
+   - Compares explicit test suite inventory before and after changes, rejecting any unapproved drops in test count or skipped tests.
+7. **E2E Integration Suite**:
+   - Full test suite via `hive.cmd test` passes with zero regressions on Unity 6000.6.7f1 (.NET Standard 2.1).
 
 ---
 
