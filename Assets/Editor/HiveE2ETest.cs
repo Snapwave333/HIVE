@@ -165,6 +165,9 @@ namespace HIVE.Editor
                 var avatarPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/AvatarPrefab.prefab");
                 AssertTrue("Cybernetic Prefabs Validated", wsPrefab != null && avatarPrefab != null && wsPrefab.GetComponent<AgentWorkspace>() != null, "AgentWorkspacePrefab and AvatarPrefab active on disk");
 
+                // TEST 11-18: Autonomous Coding Orchestration & Recovery Suite
+                HiveCodingTests.RunCodingTests((name, ok, detail) => AssertTrue(name, ok, detail));
+
                 // Clean up test DB
                 try { if (File.Exists(testDb)) File.Delete(testDb); } catch { }
             }
