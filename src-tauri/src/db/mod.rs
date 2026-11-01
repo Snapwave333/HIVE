@@ -77,10 +77,6 @@ impl Database {
         db.rebuild_search_index_once()?;
         db.seed_defaults()?;
 
-        if let Err(e) = db.create_backup() {
-            log::warn!("Daily backup failed: {}", e);
-        }
-
         Ok(db)
     }
 
