@@ -54,6 +54,40 @@ namespace HIVE.Skills
                 await Task.Yield();
                 return new SkillResult { Success = true, Output = "Indexed 1024 vector nodes into local SQLite memory graph." };
             });
+
+            RegisterSkill("coding_orchestration", async ctx =>
+            {
+                var orchestrator = HIVE.Coding.CodingOrchestrator.Instance ?? new HIVE.Coding.CodingOrchestrator();
+                var prompt = ctx.Parameters.TryGetValue("prompt", out var p) ? p?.ToString() : "Autonomous coding task";
+                var req = new HIVE.Coding.CodingTaskRequest
+                {
+                    AgentCodename = ctx.AgentCodename,
+                    Prompt = prompt
+                };
+                var res = await orchestrator.ExecuteTaskAsync(req);
+                return new SkillResult
+                {
+                    Success = res.Success,
+                    Output = $"Coding task {res.TaskId} completed via {res.ProviderName} ({res.ModelUsed}). Tokens: {res.Telemetry?.TotalTokens ?? 0}."
+                };
+            });
+
+            RegisterSkill("self_modification", async ctx =>
+            {
+                var orchestrator = HIVE.Coding.CodingOrchestrator.Instance ?? new HIVE.Coding.CodingOrchestrator();
+                var prompt = ctx.Parameters.TryGetValue("prompt", out var p) ? p?.ToString() : "Self modification task";
+                var req = new HIVE.Coding.CodingTaskRequest
+                {
+                    AgentCodename = ctx.AgentCodename,
+                    Prompt = prompt
+                };
+                var res = await orchestrator.ExecuteTaskAsync(req);
+                return new SkillResult
+                {
+                    Success = res.Success,
+                    Output = $"Self modification {res.TaskId} processed. Status: {(res.Success ? "COMMITTED" : "REJECTED_OR_STAGED")}."
+                };
+            });
         }
 
         public void RegisterSkill(string skillName, SkillHandler handler)

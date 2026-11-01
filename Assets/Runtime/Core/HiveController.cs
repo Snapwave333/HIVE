@@ -53,6 +53,7 @@ namespace HIVE.Core
         public HIVE.Security.SecurityGate SecurityGate { get; private set; }
         public HIVE.Skills.SkillRegistry SkillRegistry { get; private set; }
         public HIVE.Voice.VoiceController VoiceController { get; private set; }
+        public HIVE.Coding.ICodingOrchestrator CodingOrchestrator { get; private set; }
 
         public bool IsInitialized { get; private set; }
 
@@ -175,6 +176,10 @@ namespace HIVE.Core
             voiceGO.transform.SetParent(transform);
             voiceGO.AddComponent<AudioSource>();
             VoiceController = voiceGO.AddComponent<HIVE.Voice.VoiceController>();
+
+            // Initialize Coding Orchestrator
+            Debug.Log("[HIVE] Initializing CodingOrchestrator...");
+            CodingOrchestrator = new HIVE.Coding.CodingOrchestrator();
 
             yield return null;
         }
