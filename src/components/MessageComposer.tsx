@@ -10,6 +10,7 @@ interface MessageComposerProps {
   isMuted: boolean;
   onToggleMute: () => void;
   channelLabel: string;
+  agents: { codename: string; role: string; display_name: string }[];
 }
 
 const MAX_ATTACHMENTS = 6;
@@ -61,6 +62,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   isMuted,
   onToggleMute,
   channelLabel,
+  agents,
 }) => {
   const [text, setText] = useState("");
   const [showEmojis, setShowEmojis] = useState(false);
@@ -70,6 +72,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [caret, setCaret] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,8 +82,30 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       ? SLASH_COMMANDS.filter((c) => c.cmd.trim().startsWith(text.toLowerCase()) && c.cmd.trim() !== text.toLowerCase())
       : [];
 
+  const beforeCaret = text.slice(0, caret);
+  const mentionQuery = /(^|\s)@([A-Za-z_]*)$/.exec(beforeCaret);
+  const mentionMatches = mentionQuery
+    ? agents
+        .filter((a) => a.codename.toLowerCase().startsWith(mentionQuery[2].toLowerCase()))
+        .slice(0, 8)
+    : [];
+
+  const insertMention = (codename: string) => {
+    if (!mentionQuery) return;
+    const start = caret - mentionQuery[2].length - 1;
+    const next = `${text.slice(0, start)}@${codename} ${text.slice(caret)}`;
+    setText(next);
+    const pos = start + codename.length + 2;
+    setCaret(pos);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(pos, pos);
+    });
+  };
+
   useEffect(() => {
     setSlashIndex(0);
+    setMentionIndex(0);
   }, [text]);
 
   useEffect(() => {
@@ -117,6 +143,19 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionMatches.length > 0) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const delta = e.key === "ArrowDown" ? 1 : -1;
+        setMentionIndex((i) => (i + delta + mentionMatches.length) % mentionMatches.length);
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+        e.preventDefault();
+        insertMention(mentionMatches[Math.min(mentionIndex, mentionMatches.length - 1)].codename);
+        return;
+      }
+    }
     if (slashMatches.length > 0) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -246,6 +285,29 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           </div>
         )}
 
+        {mentionMatches.length > 0 && (
+          <div className="absolute bottom-16 left-10 bg-hive-panel border border-hive-border rounded-xl shadow-2xl py-1.5 z-30 w-80 text-xs" role="listbox">
+            {mentionMatches.map((a, i) => (
+              <button
+                key={a.codename}
+                role="option"
+                aria-selected={i === mentionIndex}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  insertMention(a.codename);
+                }}
+                className={`w-full text-left px-3 py-1.5 flex items-center justify-between ${
+                  i === mentionIndex ? "bg-hive-surface text-hive-lime" : "text-hive-brightText hover:bg-hive-surface"
+                }`}
+              >
+                <span className="font-mono">@{a.codename}</span>
+                <span className="text-hive-dimText">{a.role}</span>
+              </button>
+            ))}
+            <div className="px-3 pt-1 text-[10px] text-hive-dimText">↑↓ to pick · Tab or Enter to tag</div>
+          </div>
+        )}
+
         {slashMatches.length > 0 && (
           <div className="absolute bottom-16 left-10 bg-hive-panel border border-hive-border rounded-xl shadow-2xl py-1.5 z-30 w-80 text-xs">
             {slashMatches.map((c, i) => (
@@ -314,7 +376,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           <textarea
             ref={textareaRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setCaret(e.target.selectionStart ?? e.target.value.length);
+            }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={`Message ${channelLabel}… (/ for commands, @NAME to tag)`}

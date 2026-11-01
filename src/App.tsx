@@ -541,6 +541,7 @@ export const App: React.FC = () => {
               onCancelReply={() => setReplyingTo(null)}
               isMuted={isMuted}
               onToggleMute={handleToggleMute}
+              agents={agents}
               channelLabel={activeChannel.id === 0 ? "#agency-hq" : `@${activeChannel.agent_codename ?? activeChannel.name}`}
             />
           </main>
