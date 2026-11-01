@@ -191,7 +191,7 @@ logs/hive.log          app log (rotates at 5 MB; set RUST_LOG=debug for more)
 hive test
 ```
 
-That runs the Constitution validator, TypeScript and the Vite build, then `cargo test`. You can also run them separately:
+That runs the Constitution validator, the icon-subset and WCAG contrast checks, TypeScript and the Vite build, then `cargo test`. CI (`.github/workflows/ci.yml`) runs the same suite plus `clippy -D warnings` on Windows for every push. You can also run them separately:
 
 ```bash
 npm test
