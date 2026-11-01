@@ -249,10 +249,8 @@ function Invoke-Launch {
 
     # 3. Launch Unity
     Write-Host "  [3/3] Launching H.I.V.E. 3D Agency in Unity Editor..." -ForegroundColor Green
-    $unityArgs = @(
-        "-projectPath", "`"$ProjectRoot`"",
-        "-openfile", "`"$scenePath`""
-    )
+    $logFile = Join-Path $ProjectRoot "launch.log"
+    $unityArgs = "-projectPath `"$ProjectRoot`" -logFile `"$logFile`""
     $proc = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru
     Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. launched! PID: $($proc.Id)" -ForegroundColor Green
     Write-Host "Active Scene: CommandChamber.unity" -ForegroundColor Cyan
