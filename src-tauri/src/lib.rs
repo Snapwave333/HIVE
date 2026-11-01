@@ -551,6 +551,7 @@ pub fn run() {
                                 let _ = window.hide();
                             } else {
                                 let _ = window.show();
+                                let _ = window.maximize();
                                 let _ = window.set_focus();
                             }
                         }
@@ -579,10 +580,11 @@ pub fn run() {
                 }
             });
 
-            // Ensure main window is visible and focused on launch, and hide to tray on close
+            // Ensure main window is visible, maximized (full screen), and focused on launch
             if let Some(window) = handle.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
+                let _ = window.maximize();
                 let _ = window.set_focus();
 
                 let win_clone = window.clone();

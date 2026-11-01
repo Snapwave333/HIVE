@@ -29,6 +29,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 "open" => {
                     if let Some(window) = app_handle.get_webview_window("main") {
                         let _ = window.show();
+                        let _ = window.maximize();
                         let _ = window.set_focus();
                     }
                 }
@@ -63,6 +64,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
+                    let _ = window.maximize();
                     let _ = window.set_focus();
                 }
             }

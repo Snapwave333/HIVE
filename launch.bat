@@ -10,5 +10,5 @@ if not exist "dist\index.html" (
     call npm run build
 )
 
-start "" "%~dp0src-tauri\target\debug\hive-desktop.exe"
+start /MAX "" "%~dp0src-tauri\target\debug\hive-desktop.exe"
 echo H.I.V.E. launched. (System tray active, Ctrl+Shift+H to toggle)

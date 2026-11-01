@@ -10,7 +10,7 @@ if (!(Test-Path "$root\dist\index.html")) {
 $exe = "$root\src-tauri\target\debug\hive-desktop.exe"
 if (Test-Path $exe) {
     Write-Host "Launching H.I.V.E. Autonomous Desktop Client..." -ForegroundColor Green
-    Start-Process -FilePath $exe
+    Start-Process -FilePath $exe -WindowStyle Maximized
     Write-Host "H.I.V.E. online. Background daemon running in Windows tray." -ForegroundColor Green
     Write-Host "Global hotkey: Ctrl+Shift+H" -ForegroundColor Yellow
 } else {

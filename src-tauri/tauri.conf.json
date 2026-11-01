@@ -12,11 +12,12 @@
       {
         "label": "main",
         "title": "H.I.V.E. — Agency Desktop",
-        "width": 1180,
-        "height": 780,
+        "width": 1920,
+        "height": 1080,
         "minWidth": 800,
         "minHeight": 550,
         "resizable": true,
+        "maximized": true,
         "fullscreen": false,
         "center": true
       }
