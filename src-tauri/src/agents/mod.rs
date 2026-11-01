@@ -5,6 +5,7 @@ use crate::deployment::DeploymentEngine;
 use crate::events::EventBus;
 use chrono::Utc;
 use regex::Regex;
+use serde::Deserialize;
 use serde_json::Value;
 use std::sync::OnceLock;
 use uuid::Uuid;
@@ -341,6 +342,97 @@ pub fn parse_task_plan(text: &str, default_assignee: &str) -> Option<TaskPlan> {
     })
 }
 
+const ATTACHMENT_EXCERPT_CHARS: usize = 4000;
+const ATTACHMENT_MAX_TEXT_BYTES: u64 = 256 * 1024;
+const TEXT_EXTENSIONS: [&str; 24] = [
+    "txt", "md", "markdown", "csv", "tsv", "json", "yaml", "yml", "toml", "xml", "html", "css", "js",
+    "ts", "tsx", "jsx", "rs", "py", "go", "java", "cs", "sh", "ps1", "log",
+];
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct AttachmentRef {
+    pub hash: String,
+    pub filename: String,
+    #[serde(default)]
+    pub mime_type: String,
+    #[serde(default)]
+    pub size_bytes: u64,
+}
+
+pub fn parse_attachments(raw: Option<&str>) -> Vec<AttachmentRef> {
+    raw.map(str::trim)
+        .filter(|s| s.starts_with('['))
+        .and_then(|s| serde_json::from_str::<Vec<AttachmentRef>>(s).ok())
+        .unwrap_or_default()
+}
+
+pub fn is_text_like(mime: &str, filename: &str) -> bool {
+    let mime = mime.to_lowercase();
+    if mime.starts_with("text/") || mime.contains("json") || mime.contains("xml") || mime.contains("yaml") {
+        return true;
+    }
+    std::path::Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| TEXT_EXTENSIONS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+fn human_size(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    } else if bytes >= 1024 {
+        format!("{:.0} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+pub fn describe_attachments(db: &Database, raw: Option<&str>, include_text: bool) -> String {
+    let refs = parse_attachments(raw);
+    let mut parts = Vec::new();
+    for r in refs {
+        let meta = db.get_attachment(&r.hash).ok().flatten();
+        let mime = meta.as_ref().map(|m| m.mime_type.clone()).unwrap_or(r.mime_type.clone());
+        let size = meta.as_ref().map(|m| m.size_bytes).unwrap_or(r.size_bytes);
+        if mime.starts_with("image/") {
+            parts.push(format!(
+                "[Attached image: {} ({}). You can't see images, so ask the Owner what's in it if it matters.]",
+                r.filename,
+                human_size(size)
+            ));
+            continue;
+        }
+        let mut line = format!("[Attached file: {} ({}, {})]", r.filename, if mime.is_empty() { "unknown type" } else { &mime }, human_size(size));
+        if include_text && is_text_like(&mime, &r.filename) && size <= ATTACHMENT_MAX_TEXT_BYTES {
+            if let Some(bytes) = meta.as_ref().and_then(|m| std::fs::read(&m.file_path).ok()) {
+                let text = String::from_utf8_lossy(&bytes);
+                let excerpt: String = text.chars().take(ATTACHMENT_EXCERPT_CHARS).collect();
+                let cut = if text.chars().count() > ATTACHMENT_EXCERPT_CHARS { "\n…(truncated)" } else { "" };
+                line.push_str(&format!("\n```\n{}{}\n```", excerpt, cut));
+            }
+        }
+        parts.push(line);
+    }
+    parts.join("\n")
+}
+
+pub fn with_attachment_notes(db: &Database, history: &[Message]) -> Vec<Message> {
+    history
+        .iter()
+        .map(|m| {
+            let note = describe_attachments(db, m.attachments.as_deref(), false);
+            if note.is_empty() {
+                m.clone()
+            } else {
+                let mut copy = m.clone();
+                copy.content = if copy.content.trim().is_empty() { note } else { format!("{}\n{}", copy.content, note) };
+                copy
+            }
+        })
+        .collect()
+}
+
 pub fn post_message(
     db: &Database,
     events: &EventBus,
@@ -526,6 +618,20 @@ pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, o
         return;
     }
 
+    if !EcosystemBridges::llm_configured() {
+        let first = &responders[0];
+        post_message(
+            &db,
+            &events,
+            channel_id,
+            &first.codename,
+            &first.role,
+            "⚠ None of us can reply yet: there's no NVIDIA API key. Add one in **Settings → Bridges** (it's checked with NVIDIA before saving), then try again.",
+            false,
+        );
+        return;
+    }
+
     let multi = responders.len() > 1;
     for agent in responders {
         let code = agent.codename.clone();
@@ -536,7 +642,14 @@ pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, o
         let agent_work = agent.clone();
         let msg_work = owner_msg.clone();
         let result = tokio::task::spawn_blocking(move || {
-            let history = db_work.get_messages(channel_id, 16, None).unwrap_or_default();
+            let raw_history = db_work.get_messages(channel_id, 16, None).unwrap_or_default();
+            let latest_files = raw_history
+                .iter()
+                .rev()
+                .find(|m| m.sender == "user")
+                .map(|m| describe_attachments(&db_work, m.attachments.as_deref(), true))
+                .filter(|d| d.contains("```"));
+            let history = with_attachment_notes(&db_work, &raw_history);
             let memories = memory_lines(&db_work, &agent_work.codename, 5);
             let live = live_context(&db_work, &agent_work.codename, &msg_work);
             let (setting, instructions) = if channel_id == 0 {
@@ -567,6 +680,9 @@ pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, o
             if turns.last().map(|t| t.role != "user").unwrap_or(true) {
                 push_user_turn(&mut turns, &format!("Owner: {}", msg_work));
             }
+            if let Some(files) = latest_files {
+                push_user_turn(&mut turns, &format!("(Contents of the files the Owner just attached:)\n{}", files));
+            }
             EcosystemBridges::call_nim_chat(&agent_work.model_tier, &prompt, &turns)
         })
         .await;
@@ -576,6 +692,18 @@ pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, o
 
         let content = match result {
             Ok(Ok(text)) => clean_reply(&code, &text),
+            Ok(Err(e)) if EcosystemBridges::is_config_error(&e.to_string()) => {
+                post_message(
+                    &db,
+                    &events,
+                    channel_id,
+                    &code,
+                    &agent.role,
+                    &format!("⚠ {}", e),
+                    false,
+                );
+                return;
+            }
             Ok(Err(e)) => format!(
                 "⚠ I couldn't reach my model (`{}`) just now: {}",
                 agent.model_tier, e

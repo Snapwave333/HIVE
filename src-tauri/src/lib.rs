@@ -277,7 +277,7 @@ impl AppState {
                     "PRIME",
                     agents::role_for("PRIME"),
                     &format!(
-                        "⚠ None of us could reach our models, so the check-ins didn't happen.\n\n**Reason:** {}\n\nThe {} portfolio projects are queued and waiting. Fix the model connection (usually `NVIDIA_API_KEY`), then type `/activate` to run the assembly again.",
+                        "⚠ None of us could reach our models, so the check-ins didn't happen.\n\n**Reason:** {}\n\nThe {} portfolio projects are queued and waiting. Add a key in **Settings → Bridges** (it's verified with NVIDIA before saving), then type `/activate` to run the assembly again.",
                         reason, created
                     ),
                     true,
@@ -757,6 +757,9 @@ pub fn run() {
             commands::toggle_reaction,
             commands::forward_message,
             commands::upload_attachment,
+            commands::get_attachment,
+            commands::mark_channel_read,
+            commands::get_unread_counts,
             commands::get_tasks,
             commands::create_task,
             commands::update_task_step,
@@ -766,6 +769,7 @@ pub fn run() {
             commands::delete_memory,
             commands::search_unified,
             commands::get_bridge_status,
+            commands::set_nim_api_key,
             commands::execute_google_query,
             commands::write_obsidian_note,
             commands::search_obsidian_notes,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Component, ErrorInfo, ReactNode } from "react";
-import { Channel, Agent, Message, TaskChunk, BridgeStatus, Constitution } from "./types";
+import { Channel, Agent, Message, TaskChunk, BridgeStatus, Constitution, AttachmentRecord } from "./types";
 import { api } from "./services/api";
 import { NavRail } from "./components/NavRail";
 import { ConversationList } from "./components/ConversationList";
@@ -55,6 +55,7 @@ type TypingState = { agent: string; activity: string };
 const appendUnique = (list: Message[], msg: Message): Message[] =>
   list.some((m) => m.id === msg.id) ? list : [...list, msg];
 
+const PAGE_SIZE = 80;
 const FONT_SIZE_MIN = 12;
 const FONT_SIZE_MAX = 20;
 
@@ -77,6 +78,15 @@ export const App: React.FC = () => {
   const [typingByChannel, setTypingByChannel] = useState<Record<number, Record<string, TypingState>>>({});
   const [constitution, setConstitution] = useState<Constitution | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<number, number>>({});
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  const [hasOlder, setHasOlder] = useState<boolean>(false);
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
+
+  const markRead = (channelId: number) => {
+    setUnreadCounts((prev) => (prev[channelId] ? { ...prev, [channelId]: 0 } : prev));
+    api.markChannelRead(channelId).catch(() => {});
+  };
 
   const activeChannelRef = useRef<number>(activeChannelId);
   activeChannelRef.current = activeChannelId;
@@ -125,6 +135,16 @@ export const App: React.FC = () => {
       }
     })();
     api.getBridgeStatus().then((b) => !cancelled && setBridgeStatus(b)).catch(() => {});
+    api
+      .getUnreadCounts()
+      .then((counts) => {
+        if (cancelled) return;
+        const parsed: Record<number, number> = {};
+        for (const [k, v] of Object.entries(counts)) parsed[Number(k)] = v;
+        parsed[activeChannelRef.current] = 0;
+        setUnreadCounts(parsed);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -133,11 +153,14 @@ export const App: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     setMessages([]);
+    setHasOlder(false);
+    markRead(activeChannelId);
     api
-      .getMessages(activeChannelId)
+      .getMessages(activeChannelId, PAGE_SIZE)
       .then((msgs) => {
         if (cancelled) return;
         setMessages(msgs);
+        setHasOlder(msgs.length >= PAGE_SIZE);
         if (msgs.length > 0) {
           setLatestMessages((prev) => ({ ...prev, [activeChannelId]: msgs[msgs.length - 1] }));
         }
@@ -175,8 +198,13 @@ export const App: React.FC = () => {
             updated_at: data.timestamp,
           };
           setLatestMessages((prev) => ({ ...prev, [data.channel_id]: newMsg }));
+          const visible = document.visibilityState === "visible";
           if (data.channel_id === activeChannelRef.current) {
             setMessages((prev) => appendUnique(prev, newMsg));
+            if (visible) api.markChannelRead(data.channel_id).catch(() => {});
+          }
+          if (data.sender !== "user" && (data.channel_id !== activeChannelRef.current || !visible)) {
+            setUnreadCounts((prev) => ({ ...prev, [data.channel_id]: (prev[data.channel_id] || 0) + 1 }));
           }
         } else if (payload.type === "agent.typing") {
           const codename: string = data.codename;
@@ -211,6 +239,59 @@ export const App: React.FC = () => {
       if (unlisten) unlisten();
     };
   }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") markRead(activeChannelRef.current);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!highlightMessageId || messages.length === 0) return;
+    if (messages.some((m) => m.id === highlightMessageId)) return;
+    let cancelled = false;
+    api
+      .getMessages(activeChannelId, 1000)
+      .then((all) => {
+        if (cancelled) return;
+        if (all.some((m) => m.id === highlightMessageId)) {
+          setMessages(all);
+          setHasOlder(all.length >= 1000);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [highlightMessageId, messages, activeChannelId]);
+
+  const handleLoadOlder = async () => {
+    if (loadingOlder || !hasOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const older = await api.getMessages(activeChannelId, PAGE_SIZE, messages[0].id);
+      setMessages((prev) => {
+        const known = new Set(prev.map((m) => m.id));
+        return [...older.filter((m) => !known.has(m.id)), ...prev];
+      });
+      setHasOlder(older.length >= PAGE_SIZE);
+    } catch (err) {
+      console.error("Failed to load older messages:", err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  const handleNavigate = (channelId: number, messageId?: string) => {
+    setHighlightMessageId(messageId ?? null);
+    setActiveChannelId(channelId);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -293,7 +374,7 @@ export const App: React.FC = () => {
     );
   };
 
-  const handleUploadFile = async (file: File): Promise<string | null> => {
+  const handleUploadFile = async (file: File): Promise<AttachmentRecord | null> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = async () => {
@@ -305,7 +386,7 @@ export const App: React.FC = () => {
             file.type || "application/octet-stream",
             base64
           );
-          resolve(rec.file_path);
+          resolve(rec);
         } catch (e) {
           console.error("Attachment upload error:", e);
           resolve(null);
@@ -392,6 +473,7 @@ export const App: React.FC = () => {
             agencyState={agencyState}
             isMuted={isMuted}
             onToggleMute={handleToggleMute}
+            unreadTotal={Object.values(unreadCounts).reduce((a, b) => a + (b || 0), 0)}
           />
         )}
 
@@ -402,11 +484,12 @@ export const App: React.FC = () => {
               agents={agents}
               tasks={tasks}
               activeChannelId={activeChannelId}
-              onSelectChannel={setActiveChannelId}
+              onSelectChannel={(id) => handleNavigate(id)}
               onOpenSearch={() => setIsSearchOpen(true)}
               onTaskStepToggle={handleTaskStepToggle}
               onCreateTask={handleCreateTask}
               latestMessages={latestMessages}
+              unreadCounts={unreadCounts}
             />
           )}
 
@@ -414,6 +497,7 @@ export const App: React.FC = () => {
             <ChatHeader
               channel={activeChannel}
               agent={activeAgent}
+              agents={agents}
               isMuted={isMuted}
               onToggleMute={handleToggleMute}
               isFocusMode={isFocusMode}
@@ -441,6 +525,10 @@ export const App: React.FC = () => {
               onPlayVoice={handlePlayVoice}
               onTaskStepToggle={handleTaskStepToggle}
               isMuted={isMuted}
+              highlightMessageId={highlightMessageId}
+              hasOlder={hasOlder}
+              loadingOlder={loadingOlder}
+              onLoadOlder={handleLoadOlder}
             />
 
             <MessageComposer
@@ -449,6 +537,8 @@ export const App: React.FC = () => {
               replyingTo={replyingTo}
               onCancelReply={() => setReplyingTo(null)}
               isMuted={isMuted}
+              onToggleMute={handleToggleMute}
+              channelLabel={activeChannel.id === 0 ? "#agency-hq" : `@${activeChannel.agent_codename ?? activeChannel.name}`}
             />
           </main>
         </div>
@@ -456,7 +546,8 @@ export const App: React.FC = () => {
         <SearchModal
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
-          onNavigateChannel={setActiveChannelId}
+          onNavigateChannel={handleNavigate}
+          channels={channels}
         />
 
         <SettingsModal

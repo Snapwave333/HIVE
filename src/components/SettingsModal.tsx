@@ -46,17 +46,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [specialists, setSpecialists] = useState<TempSpecialist[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
-  const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [statusBanner, setBanner] = useState<{ text: string; error: boolean } | null>(null);
+  const setStatusBanner = (text: string | null, error = false) => setBanner(text === null ? null : { text, error });
   const [liveBridges, setLiveBridges] = useState<BridgeStatus | null>(bridgeStatus ?? null);
   const [bridgesLoading, setBridgesLoading] = useState<boolean>(false);
   const [deploying, setDeploying] = useState<boolean>(false);
+  const [apiKeyInput, setApiKeyInput] = useState<string>("");
+  const [savingKey, setSavingKey] = useState<boolean>(false);
+  const [showKeyForm, setShowKeyForm] = useState<boolean>(false);
+
+  const handleSaveKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    setSavingKey(true);
+    try {
+      const msg = await api.setNimApiKey(apiKeyInput.trim());
+      setApiKeyInput("");
+      setShowKeyForm(false);
+      setStatusBanner(`${msg}. Agents can talk now — type /activate in #agency-hq if they never checked in.`);
+      await refreshBridges();
+    } catch (e) {
+      setStatusBanner(`Key not saved: ${String(e)}`, true);
+    } finally {
+      setSavingKey(false);
+    }
+  };
 
   const refreshBridges = async () => {
     setBridgesLoading(true);
     try {
       setLiveBridges(await api.getBridgeStatus());
     } catch (e) {
-      setStatusBanner(`Bridge check failed: ${String(e)}`);
+      setStatusBanner(`Bridge check failed: ${String(e)}`, true);
     } finally {
       setBridgesLoading(false);
     }
@@ -97,7 +117,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setDeployments(updated);
       setStatusBanner(`Snapshotted ${dep.version} (sha256 ${dep.sha256_hash.slice(0, 12)}…). Preview it or keep it as a rollback point.`);
     } catch (e) {
-      setStatusBanner(`Snapshot blocked: ${String(e)}`);
+      setStatusBanner(`Snapshot blocked: ${String(e)}`, true);
     } finally {
       setDeploying(false);
     }
@@ -110,7 +130,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setDeployments(updated);
       setStatusBanner(`Rolled back to ${target.version}. Reloading the UI...`);
     } catch (e) {
-      setStatusBanner(`Rollback notice: ${String(e)}`);
+      setStatusBanner(`Rollback notice: ${String(e)}`, true);
     }
   };
 
@@ -119,7 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const path = await api.createDbBackup();
       setStatusBanner(`Online SQLite backup created: ${path}`);
     } catch (e) {
-      setStatusBanner(`Backup error: ${String(e)}`);
+      setStatusBanner(`Backup error: ${String(e)}`, true);
     }
   };
 
@@ -152,11 +172,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex border-b border-hive-border px-4 bg-hive-base/50 overflow-x-auto">
           {[
             { id: "constitution", label: "Constitution", icon: "policy" },
-            { id: "deployments", label: "UI Evolution & Rollback", icon: "account_tree" },
-            { id: "society", label: "Society & Memory", icon: "groups" },
+            { id: "deployments", label: "Snapshots", icon: "account_tree" },
+            { id: "society", label: "Society", icon: "groups" },
             { id: "accessibility", label: "Accessibility", icon: "accessibility_new" },
-            { id: "bridges", label: "CLI Bridges", icon: "hub" },
-            { id: "lifecycle", label: "Daemon Lifecycle", icon: "settings_power" },
+            { id: "bridges", label: "Bridges", icon: "hub" },
+            { id: "lifecycle", label: "Lifecycle", icon: "settings_power" },
           ].map((t) => (
             <button
               key={t.id}
@@ -177,8 +197,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {statusBanner && (
-          <div className="px-4 py-2 bg-hive-surface border-b border-hive-cyan/40 text-xs text-hive-cyan flex items-center justify-between">
-            <span>{statusBanner}</span>
+          <div
+            role={statusBanner.error ? "alert" : "status"}
+            className={`px-4 py-2 bg-hive-surface border-b text-xs flex items-center justify-between gap-3 ${
+              statusBanner.error ? "border-red-500/40 text-red-400" : "border-hive-cyan/40 text-hive-cyan"
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <M3Icon name={statusBanner.error ? "error" : "check_circle"} size={14} />
+              {statusBanner.text}
+            </span>
             <button onClick={() => setStatusBanner(null)} className="text-hive-dimText">
               <M3Icon name="close" size={14} />
             </button>
@@ -194,7 +222,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <M3Icon name="verified" filled size={16} /> Immutable Constitution v1.0.0
                 </span>
                 <p className="text-xs text-hive-dimText mt-1">
-                  These invariants are machine-verified on every autonomous commit and Blue/Green deployment. Agents cannot alter or bypass them.
+                  These rules are compiled into the app. Every UI snapshot's code is scanned against them before it can be activated, and `npm test` checks them too.
                 </p>
               </div>
 
@@ -276,7 +304,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {d.directory_path.endsWith("bundle") && (
                       <button
                         onClick={() =>
-                          api.openPreviewWindow(d.version).catch((e) => setStatusBanner(`Preview failed: ${String(e)}`))
+                          api.openPreviewWindow(d.version).catch((e) => setStatusBanner(`Preview failed: ${String(e)}`, true))
                         }
                         className="shrink-0 ml-3 px-2.5 py-1.5 rounded bg-hive-base border border-hive-cyan/40 text-hive-cyan hover:bg-hive-cyan/10 flex items-center gap-1"
                       >
@@ -451,6 +479,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {tab === "bridges" && (
             <div className="space-y-3 text-xs">
+              {(showKeyForm || (liveBridges && liveBridges.llm_provider.startsWith("Unconfigured"))) && (
+                <div className="p-3 rounded bg-hive-surface border border-hive-lime/40 space-y-2">
+                  <div className="font-semibold text-hive-brightText flex items-center gap-1.5">
+                    <M3Icon name="key" size={15} className="text-hive-lime" /> NVIDIA NIM API key
+                  </div>
+                  <p className="text-hive-dimText">
+                    Agents need this to think. Get one at build.nvidia.com. It's checked with NVIDIA before it's saved.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveKey()}
+                      placeholder="nvapi-..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="flex-1 bg-hive-base border border-hive-border rounded px-2.5 py-1.5 font-mono text-hive-brightText outline-none focus:border-hive-lime/60"
+                    />
+                    <button
+                      onClick={handleSaveKey}
+                      disabled={savingKey || !apiKeyInput.trim()}
+                      className="px-3 py-1.5 rounded bg-hive-lime text-hive-base font-semibold disabled:opacity-50"
+                    >
+                      {savingKey ? "Checking…" : "Verify & save"}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-hive-dimText">
                   {liveBridges ? "Checked just now on this machine." : "Checking bridges..."}
@@ -467,6 +524,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {
                   title: "Language model provider",
                   detail: liveBridges?.llm_provider || "Unknown",
+                  action: liveBridges && !liveBridges.llm_provider.startsWith("Unconfigured") && !showKeyForm
+                    ? { label: "Replace key", run: () => setShowKeyForm(true) }
+                    : undefined,
                   ok: !!liveBridges && !liveBridges.llm_provider.startsWith("Unconfigured"),
                   okLabel: "CONFIGURED",
                   badLabel: "NOT CONFIGURED",
@@ -510,6 +570,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="font-semibold text-hive-brightText">{b.title}</div>
                     <div className="text-hive-dimText font-mono text-[11px] mt-0.5 truncate">{b.detail}</div>
                   </div>
+                  {"action" in b && b.action && (
+                    <button
+                      onClick={b.action.run}
+                      className="shrink-0 px-2 py-0.5 rounded border border-hive-border text-hive-dimText hover:text-hive-brightText text-[10px]"
+                    >
+                      {b.action.label}
+                    </button>
+                  )}
                   <span
                     className={`shrink-0 px-2 py-0.5 rounded font-mono text-[10px] border ${
                       !liveBridges

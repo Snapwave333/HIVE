@@ -7,6 +7,7 @@ interface NavRailProps {
   agencyState: string;
   isMuted: boolean;
   onToggleMute: () => void;
+  unreadTotal: number;
 }
 
 export const NavRail: React.FC<NavRailProps> = ({
@@ -15,6 +16,7 @@ export const NavRail: React.FC<NavRailProps> = ({
   agencyState,
   isMuted,
   onToggleMute,
+  unreadTotal,
 }) => {
   return (
     <aside className="w-14 bg-hive-base border-r border-hive-border flex flex-col items-center justify-between py-4 select-none z-20 flex-shrink-0">
@@ -45,7 +47,14 @@ export const NavRail: React.FC<NavRailProps> = ({
             <span className="absolute -left-2 w-1 h-5 rounded-r bg-hive-lime" />
           )}
           <M3Icon name="forum" filled={currentTab === "chats"} size={20} />
-          <span className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-hive-lime" />
+          {unreadTotal > 0 && (
+            <span
+              className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-hive-lime text-hive-base text-[9px] font-bold flex items-center justify-center"
+              title={`${unreadTotal} unread`}
+            >
+              {unreadTotal > 99 ? "99+" : unreadTotal}
+            </span>
+          )}
         </button>
 
         {/* Settings & Constitution Tab */}

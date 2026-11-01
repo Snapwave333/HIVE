@@ -155,4 +155,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS channel_reads (
+    channel_id INTEGER PRIMARY KEY,
+    last_read_at TEXT NOT NULL
+);
 "#;

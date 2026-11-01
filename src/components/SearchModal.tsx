@@ -5,7 +5,8 @@ import { M3Icon } from "./M3Icon";
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigateChannel: (channelId: number) => void;
+  onNavigateChannel: (channelId: number, messageId?: string) => void;
+  channels: { id: number; name: string }[];
 }
 
 interface SearchResult {
@@ -15,7 +16,8 @@ interface SearchResult {
   memories: Array<{ id: string; category: string; content: string; provenance: string }>;
 }
 
-export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNavigateChannel }) => {
+export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNavigateChannel, channels }) => {
+  const channelLabel = (id: number) => (id === 0 ? "#agency-hq" : channels.find((c) => c.id === id)?.name ?? `channel ${id}`);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -103,7 +105,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                       <div
                         key={m.id}
                         onClick={() => {
-                          onNavigateChannel(m.channel_id);
+                          onNavigateChannel(m.channel_id, m.id);
                           onClose();
                         }}
                         className="p-2 rounded bg-hive-surface hover:bg-hive-surfaceHover border border-hive-border cursor-pointer transition-colors flex items-center justify-between"
@@ -112,7 +114,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                           <div className="flex items-center space-x-1.5">
                             <span className="font-semibold text-hive-cyan text-[11px]">{m.sender}</span>
                             <span className="text-[10px] text-hive-dimText font-mono">
-                              Channel #{m.channel_id}
+                              {channelLabel(m.channel_id)}
                             </span>
                           </div>
                           <p className="text-xs text-hive-brightText truncate mt-0.5">{m.snippet}</p>

@@ -601,6 +601,56 @@ impl Database {
         Ok(count)
     }
 
+    pub fn mark_channel_read(&self, channel_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO channel_reads (channel_id, last_read_at) VALUES (?1, ?2)
+             ON CONFLICT(channel_id) DO UPDATE SET last_read_at = excluded.last_read_at",
+            params![channel_id, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_unread_counts(&self) -> Result<HashMap<i64, i64>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT m.channel_id, COUNT(*)
+             FROM messages m
+             LEFT JOIN channel_reads r ON r.channel_id = m.channel_id
+             WHERE m.sender != 'user' AND m.is_deleted = 0
+               AND m.created_at > COALESCE(r.last_read_at, '')
+             GROUP BY m.channel_id",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))?;
+        let mut out = HashMap::new();
+        for r in rows {
+            let (id, n) = r?;
+            out.insert(id, n);
+        }
+        Ok(out)
+    }
+
+    pub fn get_attachment(&self, hash: &str) -> Result<Option<AttachmentMeta>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT hash, filename, mime_type, size_bytes, file_path, created_at FROM attachments WHERE hash = ?1",
+        )?;
+        let mut rows = stmt.query(params![hash])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(AttachmentMeta {
+                hash: row.get(0)?,
+                filename: row.get(1)?,
+                mime_type: row.get(2)?,
+                size_bytes: row.get::<_, i64>(3)? as u64,
+                file_path: row.get(4)?,
+                data_url: None,
+                created_at: row.get(5)?,
+            })),
+            None => Ok(None),
+        }
+    }
+
     // External Managed Attachments
     pub fn save_attachment(
         &self,

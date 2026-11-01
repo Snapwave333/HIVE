@@ -93,6 +93,13 @@ export interface TempSpecialist {
   created_at: string;
 }
 
+export interface AttachmentRef {
+  hash: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
 export interface AttachmentRecord {
   hash: string;
   filename: string;

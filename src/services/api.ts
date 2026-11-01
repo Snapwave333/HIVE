@@ -47,6 +47,9 @@ export const api = {
       mime_type: mimeType,
       data_base64: base64Data,
     }),
+  getAttachment: (hash: string) => tauriInvoke<AttachmentRecord>("get_attachment", { hash }),
+  markChannelRead: (channelId: number) => tauriInvoke<void>("mark_channel_read", { channel_id: channelId }),
+  getUnreadCounts: () => tauriInvoke<Record<string, number>>("get_unread_counts"),
   getTasks: (statusFilter?: string) =>
     tauriInvoke<TaskChunk[]>("get_tasks", { status_filter: statusFilter }),
   createTask: (title: string, assignee: string, steps: string[]) =>
@@ -106,6 +109,7 @@ export const api = {
       { query }
     ),
   getBridgeStatus: () => tauriInvoke<BridgeStatus>("get_bridge_status"),
+  setNimApiKey: (key: string) => tauriInvoke<string>("set_nim_api_key", { key }),
   executeGoogleQuery: (service: string, args: string[]) =>
     tauriInvoke<string>("execute_google_query", { service, args }),
   synthesizeVoice: (text: string, agentCodename: string) =>

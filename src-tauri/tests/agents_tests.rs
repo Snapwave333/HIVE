@@ -237,3 +237,64 @@ fn search_escapes_like_wildcards() {
     let res = db.search("_").unwrap();
     assert_eq!(res["messages"].as_array().unwrap().len(), 0);
 }
+
+#[test]
+fn unread_counts_track_agent_messages_since_last_read() {
+    let db = Database::new_in_memory().unwrap();
+    let base = db.get_unread_counts().unwrap();
+    assert_eq!(base.get(&0).copied(), Some(1), "the welcome message starts unread");
+
+    db.mark_channel_read(0).unwrap();
+    assert_eq!(db.get_unread_counts().unwrap().get(&0), None);
+
+    std::thread::sleep(Duration::from_millis(5));
+    let mut agent_msg = msg("FORGE", "build is green");
+    agent_msg.created_at = (Utc::now() + ChronoDuration::seconds(1)).to_rfc3339();
+    db.insert_message(&agent_msg).unwrap();
+    let mut own = msg("user", "nice");
+    own.created_at = (Utc::now() + ChronoDuration::seconds(1)).to_rfc3339();
+    db.insert_message(&own).unwrap();
+    assert_eq!(db.get_unread_counts().unwrap().get(&0).copied(), Some(1), "owner's own messages never count");
+}
+
+#[test]
+fn attachments_are_described_and_text_excerpted_for_agents() {
+    use base64::Engine;
+    let db = Database::new_in_memory().unwrap();
+    let body = "name,score\nforge,9\nsage,8\n";
+    let meta = db
+        .save_attachment(
+            &format!("hive-test-{}.csv", Uuid::new_v4()),
+            "text/csv",
+            &base64::engine::general_purpose::STANDARD.encode(body),
+        )
+        .unwrap();
+    let image = db
+        .save_attachment("pic.png", "image/png", &base64::engine::general_purpose::STANDARD.encode([137u8, 80, 78, 71]))
+        .unwrap();
+    let raw = serde_json::json!([
+        { "hash": meta.hash, "filename": "scores.csv", "mime_type": "text/csv", "size_bytes": meta.size_bytes },
+        { "hash": image.hash, "filename": "pic.png", "mime_type": "image/png", "size_bytes": 4 }
+    ])
+    .to_string();
+
+    assert_eq!(agents::parse_attachments(Some(&raw)).len(), 2);
+    assert!(agents::parse_attachments(Some("legacy.txt (C:/x)")).is_empty());
+
+    let full = agents::describe_attachments(&db, Some(&raw), true);
+    assert!(full.contains("scores.csv"));
+    assert!(full.contains("forge,9"), "text contents are excerpted for the model");
+    assert!(full.contains("You can't see images"));
+
+    let short = agents::describe_attachments(&db, Some(&raw), false);
+    assert!(!short.contains("forge,9"), "older messages only get a one-line note");
+
+    let mut m = msg("user", "");
+    m.attachments = Some(raw);
+    let noted = agents::with_attachment_notes(&db, &[m]);
+    assert!(noted[0].content.starts_with("[Attached file: scores.csv"));
+
+    assert!(agents::is_text_like("", "notes.MD"));
+    assert!(!agents::is_text_like("application/pdf", "doc.pdf"));
+    assert!(db.save_attachment("bad.bin", "application/octet-stream", "%%%not-base64%%%").is_err());
+}

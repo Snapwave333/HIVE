@@ -164,6 +164,36 @@ pub fn upload_attachment(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub fn get_attachment(hash: String, state: State<'_, AppState>) -> Result<AttachmentMeta, String> {
+    let mut meta = state
+        .db
+        .get_attachment(&hash)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Attachment not found".to_string())?;
+    if meta.mime_type.starts_with("image/") && meta.size_bytes <= 8 * 1024 * 1024 {
+        if let Ok(bytes) = std::fs::read(&meta.file_path) {
+            use base64::Engine;
+            meta.data_url = Some(format!(
+                "data:{};base64,{}",
+                meta.mime_type,
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            ));
+        }
+    }
+    Ok(meta)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn mark_channel_read(channel_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    state.db.mark_channel_read(channel_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn get_unread_counts(state: State<'_, AppState>) -> Result<std::collections::HashMap<i64, i64>, String> {
+    state.db.get_unread_counts().map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_tasks(
     status_filter: Option<String>,
     state: State<'_, AppState>,
@@ -305,6 +335,13 @@ pub async fn synthesize_voice(text: String, agent_codename: String) -> Result<St
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn set_nim_api_key(key: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || EcosystemBridges::store_nim_key(&key).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command(rename_all = "snake_case")]

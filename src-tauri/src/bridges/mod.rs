@@ -7,7 +7,7 @@ use std::os::windows::process::CommandExt;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
@@ -19,6 +19,7 @@ const CURL_BIN: &str = "curl.exe";
 const CURL_BIN: &str = "curl";
 
 const NIM_ENDPOINT: &str = "https://integrate.api.nvidia.com/v1/chat/completions";
+const KEY_PROBE_MODEL: &str = "nvidia/nemotron-3.5-bolt-e4b";
 
 pub const NIM_FALLBACKS: [&str; 7] = [
     "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -205,12 +206,12 @@ impl EcosystemBridges {
 
     /// Obsidian CLI & Curated Vault Bridge
     pub fn check_obsidian() -> anyhow::Result<String> {
-        let mut cmd = Command::new("where");
-        cmd.arg("Obsidian.com");
+        let mut cmd = Command::new(if cfg!(target_os = "windows") { "where" } else { "which" });
+        cmd.arg(if cfg!(target_os = "windows") { "Obsidian.com" } else { "obsidian" });
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output()?;
-        if output.status.success() {
+        let found = cmd.output().ok().filter(|o| o.status.success());
+        if let Some(output) = found {
             Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
             let vault = Self::resolve_vault_dir();
@@ -495,8 +496,92 @@ impl EcosystemBridges {
         Self::nim_key().is_some()
     }
 
+    fn runtime_key() -> &'static RwLock<Option<String>> {
+        static KEY: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+        KEY.get_or_init(|| RwLock::new(None))
+    }
+
+    pub fn key_file_path() -> PathBuf {
+        crate::db::Database::app_root_dir().join("secrets").join("nim_api_key")
+    }
+
     fn nim_key() -> Option<String> {
-        Self::get_env_key("NVIDIA_API_KEY").or_else(|| Self::get_env_key("NIM_API_KEY"))
+        if let Some(k) = Self::runtime_key().read().ok().and_then(|g| g.clone()) {
+            return Some(k);
+        }
+        Self::get_env_key("NVIDIA_API_KEY")
+            .or_else(|| Self::get_env_key("NIM_API_KEY"))
+            .or_else(|| {
+                std::fs::read_to_string(Self::key_file_path())
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
+    }
+
+    pub fn verify_nim_key(key: &str) -> anyhow::Result<String> {
+        let key = key.trim();
+        if key.is_empty() || key.chars().any(|c| c.is_whitespace() || c.is_control()) {
+            anyhow::bail!("That doesn't look like an API key");
+        }
+        let probe = Self::build_payload(
+            KEY_PROBE_MODEL,
+            "Reply with OK.",
+            &[ChatTurn {
+                role: "user",
+                content: "ping".to_string(),
+            }],
+            1,
+            true,
+        );
+        match Self::post_nim_request(key, &probe) {
+            Ok(_) | Err(NimFailure::EmptyContent) => Ok("verified with a test request".to_string()),
+            Err(NimFailure::Auth(d)) => anyhow::bail!("NVIDIA rejected that key ({})", d),
+            Err(NimFailure::Unavailable(d)) if d.contains("exited with") || d.contains("could not start") => {
+                anyhow::bail!("Couldn't reach NVIDIA to check the key: {}", d)
+            }
+            Err(other) => Ok(format!("accepted by NVIDIA (test request said: {})", other)),
+        }
+    }
+
+    pub fn store_nim_key(key: &str) -> anyhow::Result<String> {
+        let key = key.trim().to_string();
+        let verdict = Self::verify_nim_key(&key)?;
+        let location = Self::persist_key(&key)?;
+        if let Ok(mut g) = Self::runtime_key().write() {
+            *g = Some(key);
+        }
+        Self::cooldowns().lock().unwrap_or_else(|e| e.into_inner()).clear();
+        Ok(format!("Key {} and saved to {}", verdict, location))
+    }
+
+    #[cfg(target_os = "windows")]
+    fn persist_key(key: &str) -> anyhow::Result<String> {
+        use winreg::enums::*;
+        use winreg::RegKey;
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let (env, _) = hkcu.create_subkey("Environment")?;
+        env.set_value("NVIDIA_API_KEY", &key)?;
+        Ok("your Windows user environment (NVIDIA_API_KEY)".to_string())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn persist_key(key: &str) -> anyhow::Result<String> {
+        let path = Self::key_file_path();
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(&path, key)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+        }
+        Ok(path.to_string_lossy().to_string())
+    }
+
+    pub fn is_config_error(err: &str) -> bool {
+        err.contains("NVIDIA_API_KEY is not set") || err.contains("rejected the API key")
     }
 
     fn cooldowns() -> &'static Mutex<HashMap<String, Instant>> {
@@ -675,7 +760,7 @@ impl EcosystemBridges {
         turns: &[ChatTurn],
     ) -> anyhow::Result<String> {
         let key = Self::nim_key()
-            .ok_or_else(|| anyhow::anyhow!("NVIDIA_API_KEY is not set in environment"))?;
+            .ok_or_else(|| anyhow::anyhow!("NVIDIA_API_KEY is not set. Add it in Settings → Bridges"))?;
 
         let fallback_turn = [ChatTurn {
             role: "user",

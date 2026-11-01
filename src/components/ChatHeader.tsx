@@ -5,6 +5,7 @@ import { M3Icon } from "./M3Icon";
 interface ChatHeaderProps {
   channel: Channel;
   agent?: Agent;
+  agents: Agent[];
   isMuted: boolean;
   onToggleMute: () => void;
   isFocusMode: boolean;
@@ -15,6 +16,7 @@ interface ChatHeaderProps {
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   channel,
   agent,
+  agents,
   isMuted,
   onToggleMute,
   isFocusMode,
@@ -40,7 +42,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             </h1>
             {channel.id === 0 ? (
               <span className="text-[10px] bg-hive-base text-hive-lime border border-hive-lime/30 px-2 py-0.5 rounded-md font-mono">
-                12 Agents Active
+                {agents.length} agents
+                {agents.some((a) => a.status === "thinking")
+                  ? ` · ${agents.filter((a) => a.status === "thinking").length} working`
+                  : ""}
               </span>
             ) : (
               <span className="text-[10px] bg-hive-surface text-hive-lime border border-hive-border px-2 py-0.5 rounded-md font-mono">
@@ -50,8 +55,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
           <p className="text-xs text-hive-dimText truncate">
             {channel.id === 0
-              ? "Primary Agency Town Square — Autonomous 24/7 Multi-Agent Collaboration"
-              : `Direct line to ${agent?.display_name} • ${agent?.model_tier}`}
+              ? "Team group chat. Tag up to 3 agents with @NAME, or type /help"
+              : `Direct line to ${agent?.display_name ?? channel.name}${agent?.status === "thinking" ? " • typing..." : ""} • ${agent?.model_tier ?? ""}`}
           </p>
         </div>
       </div>

@@ -1,5 +1,6 @@
-import React, { useRef, useEffect, useState } from "react";
-import { Message, Agent, TaskChunk, Channel } from "../types";
+import React, { useRef, useEffect, useLayoutEffect, useState } from "react";
+import { Message, Agent, TaskChunk, Channel, AttachmentRef } from "../types";
+import { api } from "../services/api";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TaskCard } from "./TaskCard";
@@ -27,6 +28,91 @@ const markdownComponents: Components = {
 
 const remarkPlugins = [remarkGfm];
 
+const imageCache = new Map<string, Promise<string | null>>();
+
+function loadImage(hash: string): Promise<string | null> {
+  if (!imageCache.has(hash)) {
+    imageCache.set(
+      hash,
+      api
+        .getAttachment(hash)
+        .then((a) => a.data_url ?? null)
+        .catch(() => null)
+    );
+  }
+  return imageCache.get(hash)!;
+}
+
+function parseAttachments(raw?: string): AttachmentRef[] | null {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+const AttachmentImage: React.FC<{ attachment: AttachmentRef }> = ({ attachment }) => {
+  const [src, setSrc] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    loadImage(attachment.hash).then((url) => alive && setSrc(url));
+    return () => {
+      alive = false;
+    };
+  }, [attachment.hash]);
+  if (src === undefined) {
+    return <div className="w-48 h-32 rounded-lg bg-hive-base border border-hive-border animate-pulse" />;
+  }
+  if (src === null) {
+    return <AttachmentChip attachment={attachment} />;
+  }
+  return (
+    <a href={src} download={attachment.filename} title={attachment.filename}>
+      <img src={src} alt={attachment.filename} className="max-w-[320px] max-h-60 rounded-lg border border-hive-border object-contain" />
+    </a>
+  );
+};
+
+const AttachmentChip: React.FC<{ attachment: AttachmentRef }> = ({ attachment }) => (
+  <span className="px-2.5 py-1.5 rounded-lg bg-hive-base border border-hive-border text-[11px] flex items-center gap-1.5 max-w-[280px]">
+    <M3Icon name="description" size={14} className="text-hive-lime" />
+    <span className="truncate text-hive-brightText">{attachment.filename}</span>
+    <span className="text-hive-dimText font-mono text-[10px]">{formatSize(attachment.size_bytes || 0)}</span>
+  </span>
+);
+
+const Attachments: React.FC<{ raw: string }> = ({ raw }) => {
+  const list = parseAttachments(raw);
+  if (list === null) {
+    return (
+      <div className="mt-2.5 px-3 py-2 rounded-lg bg-hive-base border border-hive-border text-[11px] font-mono text-hive-lime flex items-center gap-1.5">
+        <M3Icon name="attach_file" size={14} />
+        <span className="truncate max-w-[320px] text-hive-dimText">{raw}</span>
+      </div>
+    );
+  }
+  if (list.length === 0) return null;
+  return (
+    <div className="mt-2.5 flex flex-wrap gap-2">
+      {list.map((a) =>
+        (a.mime_type || "").startsWith("image/") ? (
+          <AttachmentImage key={a.hash} attachment={a} />
+        ) : (
+          <AttachmentChip key={a.hash} attachment={a} />
+        )
+      )}
+    </div>
+  );
+};
+
 const MarkdownContent = React.memo(({ content }: { content: string }) => (
   <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
     {content}
@@ -47,6 +133,10 @@ interface MessageStreamProps {
   onPlayVoice: (text: string, agentCodename: string) => void;
   onTaskStepToggle: (taskId: string, stepIndex: number, completed: boolean) => void;
   isMuted: boolean;
+  highlightMessageId?: string | null;
+  hasOlder?: boolean;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
 }
 
 export const MessageStream: React.FC<MessageStreamProps> = ({
@@ -63,23 +153,78 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   onPlayVoice,
   onTaskStepToggle,
   isMuted,
+  highlightMessageId,
+  hasOlder,
+  loadingOlder,
+  onLoadOlder,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const prevFirstIdRef = useRef<string | undefined>(undefined);
+  const prevHeightRef = useRef(0);
+  const lastIdRef = useRef<string | undefined>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>("");
   const [forwardingId, setForwardingId] = useState<string | null>(null);
 
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const firstId = messages[0]?.id;
+    const lastId = messages[messages.length - 1]?.id;
+    const prepended = prevFirstIdRef.current !== undefined && firstId !== prevFirstIdRef.current && lastId === lastIdRef.current;
+    if (prepended) {
+      el.scrollTop += el.scrollHeight - prevHeightRef.current;
+    } else if (lastId !== lastIdRef.current) {
+      const isOwn = messages[messages.length - 1]?.sender === "user";
+      if (lastIdRef.current === undefined || isOwn || nearBottomRef.current) {
+        bottomRef.current?.scrollIntoView({ behavior: lastIdRef.current === undefined ? "auto" : "smooth" });
+      }
+    }
+    prevFirstIdRef.current = firstId;
+    lastIdRef.current = lastId;
+    prevHeightRef.current = el.scrollHeight;
+  }, [messages]);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, typingIndicator]);
+    if (typingIndicator && nearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [typingIndicator]);
+
+  useEffect(() => {
+    if (!highlightMessageId) return;
+    const el = document.getElementById(`msg-${highlightMessageId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightMessageId, messages]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    prevHeightRef.current = el.scrollHeight;
+    if (el.scrollTop < 80 && hasOlder && !loadingOlder && onLoadOlder) onLoadOlder();
+  };
 
   const getAgent = (codename: string): Agent | undefined => {
     return agents.find((a) => a.codename === codename);
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-6 bg-hive-base font-segoe select-text">
+    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 py-6 bg-hive-base font-segoe select-text">
       <div className="max-w-5xl mx-auto w-full space-y-5">
+      {hasOlder && (
+        <div className="flex justify-center">
+          <button
+            onClick={onLoadOlder}
+            disabled={loadingOlder}
+            className="px-3 py-1 rounded-full bg-hive-surface border border-hive-border text-[11px] text-hive-dimText hover:text-hive-brightText disabled:opacity-60"
+          >
+            {loadingOlder ? "Loading…" : "Load older messages"}
+          </button>
+        </div>
+      )}
       {messages.map((msg) => {
         const isUser = msg.sender === "user";
         const agent = !isUser ? getAgent(msg.sender) : undefined;
@@ -101,7 +246,10 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
         return (
           <div
             key={msg.id}
-            className={`flex flex-col group ${isUser ? "items-end" : "items-start"}`}
+            id={`msg-${msg.id}`}
+            className={`flex flex-col group rounded-2xl transition-shadow ${isUser ? "items-end" : "items-start"} ${
+              highlightMessageId === msg.id ? "ring-2 ring-hive-lime/60 ring-offset-4 ring-offset-hive-base" : ""
+            }`}
           >
             {/* Sender Name & Role Label */}
             {!isUser && (
@@ -168,21 +316,11 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                 </div>
               ) : (
                 <div className="text-[13px] leading-relaxed prose prose-invert max-w-none break-words">
-                  <MarkdownContent content={msg.content} />
+                  {msg.content.trim() && <MarkdownContent content={msg.content} />}
                 </div>
               )}
 
-              {/* Attachments badge */}
-              {msg.attachments && (
-                <div className="mt-2.5 px-3 py-2 rounded-lg bg-hive-base border border-hive-border text-[11px] font-mono text-hive-lime flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <M3Icon name="attach_file" size={14} /> Attachment attached
-                  </span>
-                  <span className="text-hive-dimText text-[10px] truncate max-w-[200px]">
-                    {msg.attachments}
-                  </span>
-                </div>
-              )}
+              {msg.attachments && <Attachments raw={msg.attachments} />}
 
               {/* Inline Task Card if present */}
               {associatedTask && (

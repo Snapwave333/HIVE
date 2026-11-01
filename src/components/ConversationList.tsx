@@ -13,6 +13,7 @@ interface ConversationListProps {
   onTaskStepToggle: (taskId: string, stepIndex: number, completed: boolean) => void;
   onCreateTask: (title: string, assignee: string, steps: string[]) => void;
   latestMessages: Record<number, Message>;
+  unreadCounts: Record<number, number>;
 }
 
 export const ConversationList: React.FC<ConversationListProps> = ({
@@ -25,6 +26,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   onTaskStepToggle,
   onCreateTask,
   latestMessages,
+  unreadCounts,
 }) => {
   const [filter, setFilter] = useState<"all" | "tasks">("all");
   const [query, setQuery] = useState("");
@@ -194,8 +196,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     <span className="font-semibold text-[13px] text-hive-brightText flex items-center gap-1 truncate">
                       #agency-hq
                     </span>
-                    <span className="text-[10px] text-hive-dimText font-mono flex-shrink-0">
-                      {latestMessages[0] ? formatTime(latestMessages[0].created_at) : ""}
+                    <span className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className={`text-[10px] font-mono ${unreadCounts[0] ? "text-hive-lime" : "text-hive-dimText"}`}>
+                        {latestMessages[0] ? formatTime(latestMessages[0].created_at) : ""}
+                      </span>
+                      {unreadCounts[0] > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-hive-lime text-hive-base text-[10px] font-bold flex items-center justify-center">
+                          {unreadCounts[0] > 99 ? "99+" : unreadCounts[0]}
+                        </span>
+                      )}
                     </span>
                   </div>
                   <p className="text-xs text-hive-dimText truncate mt-1">
@@ -270,8 +279,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                             @{channel.agent_codename}
                           </span>
                         </span>
-                        <span className="text-[10px] text-hive-dimText font-mono flex-shrink-0">
-                          {lastMsg ? formatTime(lastMsg.created_at) : ""}
+                        <span className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className={`text-[10px] font-mono ${unreadCounts[channel.id] ? "text-hive-lime" : "text-hive-dimText"}`}>
+                            {lastMsg ? formatTime(lastMsg.created_at) : ""}
+                          </span>
+                          {unreadCounts[channel.id] > 0 && (
+                            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-hive-lime text-hive-base text-[10px] font-bold flex items-center justify-center">
+                              {unreadCounts[channel.id] > 99 ? "99+" : unreadCounts[channel.id]}
+                            </span>
+                          )}
                         </span>
                       </div>
 

@@ -1,13 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { M3Icon } from "./M3Icon";
+import { AttachmentRecord } from "../types";
 
 interface MessageComposerProps {
   onSendMessage: (content: string, replyToId?: string, attachmentsJson?: string) => void;
-  onUploadFile?: (file: File) => Promise<string | null>;
+  onUploadFile?: (file: File) => Promise<AttachmentRecord | null>;
   replyingTo?: { id: string; sender: string; snippet: string } | null;
   onCancelReply?: () => void;
   isMuted: boolean;
+  onToggleMute: () => void;
+  channelLabel: string;
 }
+
+const MAX_ATTACHMENTS = 6;
 
 const KAOMOJIS = [
   "(ง'̀-'́)ง",
@@ -24,12 +29,27 @@ const KAOMOJIS = [
 
 const EMOJIS = ["👍", "❤️", "🔥", "🚀", "⬡", "⚡", "💡", "🎯", "🛡️", "👀", "✅", "⚠️"];
 
-const GIF_PRESETS = [
-  { label: "Ship It 🚀", text: "![Ship It GIF](https://media.giphy.com/media/143v0Z4767T15e/giphy.gif)" },
-  { label: "Mind Blown 🤯", text: "![Mind Blown GIF](https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif)" },
-  { label: "High Five 🙌", text: "![High Five GIF](https://media.giphy.com/media/3oEjHV0z8S7WM4MwnK/giphy.gif)" },
-  { label: "Deploying ⚡", text: "![Deploying GIF](https://media.giphy.com/media/LmNwrBhejkK9EFP504/giphy.gif)" },
+const SLASH_COMMANDS = [
+  { cmd: "/help", hint: "list commands" },
+  { cmd: "/task ", hint: "queue a goal as 5-minute steps" },
+  { cmd: "/gog ", hint: "run the Google CLI" },
+  { cmd: "/obsidian ", hint: "save or search vault notes" },
+  { cmd: "/browser ", hint: "query the Chrome relay" },
+  { cmd: "/debate ", hint: "council vote on a proposal" },
+  { cmd: "/spawn_temp ", hint: "temporary specialist" },
+  { cmd: "/deploy ", hint: "snapshot the running UI" },
+  { cmd: "/rollback", hint: "previous UI snapshot" },
+  { cmd: "/backup", hint: "SQLite snapshot now" },
+  { cmd: "/pause", hint: "pause background work" },
+  { cmd: "/resume", hint: "resume background work" },
+  { cmd: "/activate", hint: "rerun the agency check-in" },
 ];
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 export const MessageComposer: React.FC<MessageComposerProps> = ({
   onSendMessage,
@@ -37,15 +57,28 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   replyingTo,
   onCancelReply,
   isMuted,
+  onToggleMute,
+  channelLabel,
 }) => {
   const [text, setText] = useState("");
   const [showEmojis, setShowEmojis] = useState(false);
   const [showKaomoji, setShowKaomoji] = useState(false);
-  const [showGifs, setShowGifs] = useState(false);
-  const [attachedFileInfo, setAttachedFileInfo] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentRecord[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const slashMatches =
+    text.startsWith("/") && !text.includes(" ") && !text.includes("\n")
+      ? SLASH_COMMANDS.filter((c) => c.cmd.trim().startsWith(text.toLowerCase()) && c.cmd.trim() !== text.toLowerCase())
+      : [];
+
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [text]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -54,72 +87,97 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     }
   }, [text]);
 
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [channelLabel, replyingTo]);
+
+  const addFiles = async (files: File[]) => {
+    if (!onUploadFile || files.length === 0) return;
+    setUploadError(null);
+    const room = MAX_ATTACHMENTS - attachments.length;
+    const batch = files.slice(0, Math.max(0, room));
+    if (batch.length < files.length) setUploadError(`Up to ${MAX_ATTACHMENTS} files per message.`);
+    setUploading((n) => n + batch.length);
+    for (const file of batch) {
+      const rec = await onUploadFile(file);
+      setUploading((n) => n - 1);
+      if (rec) {
+        setAttachments((prev) => (prev.some((a) => a.hash === rec.hash) ? prev : [...prev, rec]));
+      } else {
+        setUploadError(`Couldn't attach ${file.name}.`);
+      }
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashMatches.length > 0) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const delta = e.key === "ArrowDown" ? 1 : -1;
+        setSlashIndex((i) => (i + delta + slashMatches.length) % slashMatches.length);
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setText(slashMatches[slashIndex].cmd);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items || !onUploadFile) return;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file) {
-          e.preventDefault();
-          const storedPath = await onUploadFile(file);
-          if (storedPath) {
-            setAttachedFileInfo(`${file.name} (${storedPath})`);
-          }
-        }
-      }
+    if (e.key === "Escape" && replyingTo && onCancelReply) {
+      onCancelReply();
     }
   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = e.dataTransfer?.files;
-    if (files && files.length > 0 && onUploadFile) {
-      const file = files[0];
-      const storedPath = await onUploadFile(file);
-      if (storedPath) {
-        setAttachedFileInfo(`${file.name} (${storedPath})`);
-      }
-    }
+    addFiles(Array.from(e.dataTransfer?.files ?? []));
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0 && onUploadFile) {
-      const file = files[0];
-      const storedPath = await onUploadFile(file);
-      if (storedPath) {
-        setAttachedFileInfo(`${file.name} (${storedPath})`);
-      }
-    }
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files ?? []));
+    e.target.value = "";
   };
+
+  const canSend = (text.trim().length > 0 || attachments.length > 0) && uploading === 0;
 
   const handleSend = () => {
-    if (!text.trim() && !attachedFileInfo) return;
-    const msgContent = text.trim() || `Attached file: ${attachedFileInfo}`;
-    onSendMessage(msgContent, replyingTo?.id, attachedFileInfo || undefined);
+    if (!canSend) return;
+    const attachmentsJson =
+      attachments.length > 0
+        ? JSON.stringify(
+            attachments.map((a) => ({
+              hash: a.hash,
+              filename: a.filename,
+              mime_type: a.mime_type,
+              size_bytes: a.size_bytes,
+            }))
+          )
+        : undefined;
+    onSendMessage(text.trim(), replyingTo?.id, attachmentsJson);
     setText("");
-    setAttachedFileInfo(null);
+    setAttachments([]);
+    setUploadError(null);
     setShowEmojis(false);
     setShowKaomoji(false);
-    setShowGifs(false);
     if (onCancelReply) onCancelReply();
   };
 
   const insertText = (str: string) => {
     setText((prev) => prev + str);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    textareaRef.current?.focus();
   };
 
   return (
@@ -135,178 +193,171 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       }`}
     >
       <div className="max-w-5xl mx-auto w-full relative">
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        onChange={handleFileSelect}
-        className="hidden"
-      />
+        <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" />
 
-      {/* Replying banner */}
-      {replyingTo && (
-        <div className="mb-2.5 px-3.5 py-2 rounded-xl bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs">
-          <div className="truncate">
-            <span className="text-hive-lime font-semibold">Replying to @{replyingTo.sender}: </span>
-            <span className="text-hive-dimText">{replyingTo.snippet}</span>
+        {replyingTo && (
+          <div className="mb-2.5 px-3.5 py-2 rounded-xl bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs">
+            <div className="truncate">
+              <span className="text-hive-lime font-semibold">Replying to @{replyingTo.sender}: </span>
+              <span className="text-hive-dimText">{replyingTo.snippet}</span>
+            </div>
+            <button onClick={onCancelReply} className="text-hive-dimText hover:text-hive-brightText text-xs ml-2" title="Cancel reply (Esc)">
+              <M3Icon name="close" size={14} />
+            </button>
           </div>
+        )}
+
+        {(attachments.length > 0 || uploading > 0 || uploadError) && (
+          <div className="mb-2.5 flex flex-wrap gap-2 text-xs">
+            {attachments.map((a) => (
+              <span
+                key={a.hash}
+                className="pl-2 pr-1 py-1 rounded-lg bg-hive-surface border border-hive-border flex items-center gap-1.5 max-w-[260px]"
+              >
+                {a.data_url ? (
+                  <img src={a.data_url} alt="" className="w-6 h-6 rounded object-cover" />
+                ) : (
+                  <M3Icon name="description" size={15} className="text-hive-lime" />
+                )}
+                <span className="truncate text-hive-brightText">{a.filename}</span>
+                <span className="text-hive-dimText font-mono text-[10px]">{formatSize(a.size_bytes)}</span>
+                <button
+                  onClick={() => setAttachments((prev) => prev.filter((x) => x.hash !== a.hash))}
+                  className="text-hive-dimText hover:text-hive-brightText"
+                  title="Remove"
+                >
+                  <M3Icon name="close" size={13} />
+                </button>
+              </span>
+            ))}
+            {uploading > 0 && (
+              <span className="px-2 py-1 rounded-lg bg-hive-surface border border-hive-border text-hive-dimText">
+                Uploading {uploading}…
+              </span>
+            )}
+            {uploadError && <span className="px-2 py-1 text-red-400">{uploadError}</span>}
+          </div>
+        )}
+
+        {slashMatches.length > 0 && (
+          <div className="absolute bottom-16 left-10 bg-hive-panel border border-hive-border rounded-xl shadow-2xl py-1.5 z-30 w-80 text-xs">
+            {slashMatches.map((c, i) => (
+              <button
+                key={c.cmd}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setText(c.cmd);
+                  textareaRef.current?.focus();
+                }}
+                className={`w-full text-left px-3 py-1.5 flex items-center justify-between ${
+                  i === slashIndex ? "bg-hive-surface text-hive-lime" : "text-hive-brightText hover:bg-hive-surface"
+                }`}
+              >
+                <span className="font-mono">{c.cmd.trim()}</span>
+                <span className="text-hive-dimText">{c.hint}</span>
+              </button>
+            ))}
+            <div className="px-3 pt-1 text-[10px] text-hive-dimText">↑↓ to pick · Tab to complete</div>
+          </div>
+        )}
+
+        {showKaomoji && (
+          <div className="absolute bottom-16 right-24 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-wrap gap-1.5 max-w-xs">
+            {KAOMOJIS.map((k) => (
+              <button
+                key={k}
+                onClick={() => {
+                  insertText(` ${k} `);
+                  setShowKaomoji(false);
+                }}
+                className="px-2.5 py-1 bg-hive-surface hover:border-hive-lime/50 border border-hive-border text-xs rounded-lg font-mono text-hive-brightText transition-colors"
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showEmojis && (
+          <div className="absolute bottom-16 right-16 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-wrap gap-1.5 max-w-xs">
+            {EMOJIS.map((e) => (
+              <button
+                key={e}
+                onClick={() => {
+                  insertText(e);
+                  setShowEmojis(false);
+                }}
+                className="w-8 h-8 flex items-center justify-center hover:bg-hive-surface rounded-lg text-sm transition-colors"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end space-x-2.5 bg-hive-surface rounded-xl px-3.5 py-2 border border-hive-border focus-within:border-hive-lime/50 transition-all">
           <button
-            onClick={onCancelReply}
-            className="text-hive-dimText hover:text-hive-brightText text-xs ml-2"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-brightText transition-colors flex items-center justify-center flex-shrink-0"
+            title="Attach files (drag & drop or paste also work). Agents can read text files."
           >
-            <M3Icon name="close" size={14} />
+            <M3Icon name="attach_file" size={18} />
+          </button>
+
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={`Message ${channelLabel}… (/ for commands, @NAME to tag)`}
+            rows={1}
+            className="flex-1 bg-transparent border-none outline-none resize-none text-[13px] text-hive-brightText placeholder-hive-dimText leading-relaxed max-h-36 py-1 font-segoe"
+          />
+
+          <button
+            onClick={() => {
+              setShowKaomoji(!showKaomoji);
+              setShowEmojis(false);
+            }}
+            className="px-2 h-8 rounded-lg hover:bg-hive-base text-[11px] font-mono text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
+            title="Kaomoji"
+          >
+            (ง'̀-'́)ง
+          </button>
+
+          <button
+            onClick={() => {
+              setShowEmojis(!showEmojis);
+              setShowKaomoji(false);
+            }}
+            className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
+            title="Emoji"
+          >
+            <M3Icon name="mood" size={18} />
+          </button>
+
+          <button
+            onClick={onToggleMute}
+            className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
+              isMuted ? "text-hive-dimText/60 hover:text-hive-dimText" : "text-hive-lime hover:bg-hive-lime/10"
+            }`}
+            title={isMuted ? "Speech is muted. Click to allow playback on click." : "Speech playback allowed. Click to mute."}
+          >
+            <M3Icon name={isMuted ? "volume_off" : "volume_up"} filled={!isMuted} size={18} />
+          </button>
+
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
+              canSend ? "bg-hive-lime text-hive-base hover:opacity-90 font-bold" : "text-hive-dimText/40 cursor-not-allowed"
+            }`}
+            title={uploading > 0 ? "Waiting for uploads…" : "Send (Enter)"}
+          >
+            <M3Icon name="send" filled={canSend} size={17} />
           </button>
         </div>
-      )}
-
-      {/* Attached File Preview */}
-      {attachedFileInfo && (
-        <div className="mb-2.5 px-3.5 py-2 rounded-xl bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs font-mono">
-          <span className="text-hive-lime truncate flex items-center gap-1.5">
-            <M3Icon name="attach_file" size={14} /> {attachedFileInfo}
-          </span>
-          <button
-            onClick={() => setAttachedFileInfo(null)}
-            className="text-hive-dimText hover:text-hive-brightText ml-2"
-          >
-            <M3Icon name="close" size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Kaomoji Drawer */}
-      {showKaomoji && (
-        <div className="absolute bottom-16 left-0 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-wrap gap-1.5 max-w-xs">
-          {KAOMOJIS.map((k) => (
-            <button
-              key={k}
-              onClick={() => {
-                insertText(` ${k} `);
-                setShowKaomoji(false);
-              }}
-              className="px-2.5 py-1 bg-hive-surface hover:border-hive-lime/50 border border-hive-border text-xs rounded-lg font-mono text-hive-brightText transition-colors"
-            >
-              {k}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Emoji Picker */}
-      {showEmojis && (
-        <div className="absolute bottom-16 left-12 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-wrap gap-1.5 max-w-xs">
-          {EMOJIS.map((e) => (
-            <button
-              key={e}
-              onClick={() => {
-                insertText(e);
-                setShowEmojis(false);
-              }}
-              className="w-8 h-8 flex items-center justify-center hover:bg-hive-surface rounded-lg text-sm transition-colors"
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* GIF Picker */}
-      {showGifs && (
-        <div className="absolute bottom-16 right-16 bg-hive-panel border border-hive-border rounded-xl shadow-2xl p-2.5 z-30 flex flex-col gap-1.5 w-48">
-          <div className="text-[10px] text-hive-dimText uppercase font-semibold px-1">
-            Quick GIFs
-          </div>
-          {GIF_PRESETS.map((g) => (
-            <button
-              key={g.label}
-              onClick={() => {
-                onSendMessage(g.text, replyingTo?.id);
-                setShowGifs(false);
-              }}
-              className="px-2.5 py-1.5 text-left bg-hive-surface hover:border-hive-lime/50 border border-hive-border text-xs rounded-lg text-hive-brightText transition-colors"
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Composer Input Area */}
-      <div className="flex items-end space-x-2.5 bg-hive-surface rounded-xl px-3.5 py-2 border border-hive-border focus-within:border-hive-lime/50 transition-all">
-        {/* Attachment Button */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-brightText transition-colors flex items-center justify-center flex-shrink-0"
-          title="Attach file (drag & drop or Ctrl+V paste supported)"
-        >
-          <M3Icon name="attach_file" size={18} />
-        </button>
-
-        {/* Text Area */}
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder="Message #agency-hq, @agent, or /help (/gog, /obsidian, /browser, /task, /debate, /deploy)..."
-          rows={1}
-          className="flex-1 bg-transparent border-none outline-none resize-none text-[13px] text-hive-brightText placeholder-hive-dimText leading-relaxed max-h-36 py-1 font-segoe"
-        />
-
-        {/* GIF Trigger Button */}
-        <button
-          onClick={() => setShowGifs(!showGifs)}
-          className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
-          title="GIF Picker"
-        >
-          <M3Icon name="gif_box" size={18} />
-        </button>
-
-        {/* Kaomoji Trigger Button */}
-        <button
-          onClick={() => setShowKaomoji(!showKaomoji)}
-          className="px-2 h-8 rounded-lg hover:bg-hive-base text-[11px] font-mono text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
-          title="Kaomoji Drawer (ง'̀-'́)ง"
-        >
-          (ง'̀-'́)ง
-        </button>
-
-        {/* Emoji Trigger Button */}
-        <button
-          onClick={() => setShowEmojis(!showEmojis)}
-          className="w-8 h-8 rounded-lg hover:bg-hive-base text-hive-dimText hover:text-hive-lime transition-colors flex items-center justify-center flex-shrink-0"
-          title="Emoji Picker"
-        >
-          <M3Icon name="mood" size={18} />
-        </button>
-
-        {/* Voice Status Indicator */}
-        <button
-          className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
-            isMuted
-              ? "text-hive-dimText/60 hover:text-hive-dimText"
-              : "text-hive-lime hover:bg-hive-lime/10"
-          }`}
-          title={isMuted ? "Audio muted by default (Strict Invariant)" : "Voice synthesis enabled"}
-        >
-          <M3Icon name={isMuted ? "mic_off" : "mic"} filled={!isMuted} size={18} />
-        </button>
-
-        {/* Send Button */}
-        <button
-          onClick={handleSend}
-          disabled={!text.trim() && !attachedFileInfo}
-          className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
-            text.trim() || attachedFileInfo
-              ? "bg-hive-lime text-hive-base hover:opacity-90 font-bold"
-              : "text-hive-dimText/40 cursor-not-allowed"
-          }`}
-          title="Send (Enter)"
-        >
-          <M3Icon name="send" filled={Boolean(text.trim() || attachedFileInfo)} size={17} />
-        </button>
-      </div>
       </div>
     </div>
   );
