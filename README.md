@@ -30,7 +30,10 @@ H.I.V.E. is a Tauri 2 desktop app with a Rust backend and a React frontend.
 - 🔌 **Real local bridges.** Google via the `gog` CLI, an Obsidian vault, the OpenCode Chrome relay and Windows speech, each reporting its real status.
 - 🗳️ **Governance.** A weighted council votes on big decisions, and anything owner-controlled waits for you.
 - 🛡️ **Blue/green UI snapshots.** The running UI bundle is snapshotted, hashed and checked against the [Application Constitution](app/constitution.json), and you can roll back instantly.
-- 🔇 **Quiet by default.** Audio is muted, and speech only plays when you click.
+- 🔇 **Quiet by default.** Audio is muted, and speech only plays when you click. Optional silent pop-ups for agent DMs while the app is hidden.
+- 🔎 **Fast search.** Ranked full-text search over messages and memories (`Ctrl+K`), with prefix matching and jump-to-message.
+- ♿ **Accessible.** Bundled Atkinson Hyperlegible and OpenDyslexic fonts, text size from 12 to 20, WCAG AA contrast enforced by `npm test`, and full keyboard navigation.
+- 📎 **Attachments agents can read.** Drop or paste files, images preview inline, and agents get the contents of small text files.
 
 ---
 
@@ -74,6 +77,8 @@ On first launch the agents check in on `#agency-hq`, an 8-project starter portfo
 ---
 
 ## 💻 Using It
+
+Unread messages show as badges in the sidebar. Type `/` in the composer for a command menu.
 
 Just talk. In `#agency-hq`, tag up to three agents (`@FORGE @SENTINEL thoughts?`) and they answer in order, building on each other. With no tag, PRIME answers. In a DM, that agent answers.
 
