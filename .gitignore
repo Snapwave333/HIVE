@@ -49,6 +49,15 @@ ExportedObj/
 # Unity3D generated file on crash reports
 sysinfo.txt
 
+# Node & Frontend
+node_modules/
+dist/
+
+# Tauri & Rust
+src-tauri/target/
+src-tauri/gen/
+
+
 # Builds
 *.apk
 *.unitypackage

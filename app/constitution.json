@@ -1,0 +1,38 @@
+{
+  "$schema": "https://hive.agency/schemas/constitution-v1.json",
+  "version": "1.0.0",
+  "invariants": {
+    "user_sovereignty": {
+      "immutable": true,
+      "rule": "Agents cannot transfer ownership, alter user authorization gates, or lock the user out."
+    },
+    "agency_chat_architecture": {
+      "immutable": true,
+      "rule": "One primary agency group chat (#agency-hq) and 12 individual agent DMs must remain permanently accessible."
+    },
+    "agent_permanence": {
+      "immutable": true,
+      "rule": "The original 12 permanent agent identities, roles, and histories cannot be deleted or replaced."
+    },
+    "messaging_interaction_model": {
+      "immutable": true,
+      "rule": "WhatsApp-style messaging UX must be preserved: bottom input bar, chronological message stream, reactions, search."
+    },
+    "audio_and_notification_sovereignty": {
+      "immutable": true,
+      "rule": "All audio must remain muted by default. Speech only on explicit user click. Notification quiet preferences cannot be overridden."
+    },
+    "accessibility_baseline": {
+      "immutable": true,
+      "rule": "WCAG 2.1 AA contrast, scalable fonts, dyslexia toggles, and ADHD 5-minute task chunking must never be disabled."
+    },
+    "data_integrity": {
+      "immutable": true,
+      "rule": "UI updates cannot modify or delete messages, memories, attachments, or SQLite operational history."
+    },
+    "zero_dashboard_bloat": {
+      "immutable": true,
+      "rule": "Agents are prohibited from transforming the app into a 3D virtual environment or bloated multi-page dashboard."
+    }
+  }
+}

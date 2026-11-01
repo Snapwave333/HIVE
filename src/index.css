@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-base: #0B0F14;
+    --bg-panel: #121820;
+    --bg-surface: #18222D;
+    --bg-surface-hover: #1E2A38;
+    --bg-outgoing: #16332E;
+    --accent-cyan: #42CFC4;
+    --accent-lime: #85D94B;
+    --border-hairline: #212E3D;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    color: #E0E8F0;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Custom minimal WhatsApp scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #212E3D;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #42CFC4;
+}
