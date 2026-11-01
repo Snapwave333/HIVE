@@ -221,6 +221,8 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   const prevFirstIdRef = useRef<string | undefined>(undefined);
   const prevHeightRef = useRef(0);
   const lastIdRef = useRef<string | undefined>(undefined);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const [unseen, setUnseen] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>("");
   const [forwardingId, setForwardingId] = useState<string | null>(null);
@@ -237,6 +239,9 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
       const isOwn = messages[messages.length - 1]?.sender === "user";
       if (lastIdRef.current === undefined || isOwn || nearBottomRef.current) {
         bottomRef.current?.scrollIntoView({ behavior: lastIdRef.current === undefined ? "auto" : "smooth" });
+        setUnseen(0);
+      } else {
+        setUnseen((n) => n + 1);
       }
     }
     prevFirstIdRef.current = firstId;
@@ -260,6 +265,8 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
     const el = scrollRef.current;
     if (!el) return;
     nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setAwayFromBottom(!nearBottomRef.current);
+    if (nearBottomRef.current) setUnseen(0);
     prevHeightRef.current = el.scrollHeight;
     if (el.scrollTop < 80 && hasOlder && !loadingOlder && onLoadOlder) onLoadOlder();
   };
@@ -269,6 +276,20 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   };
 
   return (
+    <div className="flex-1 relative overflow-hidden flex flex-col">
+    {awayFromBottom && (
+      <button
+        onClick={() => {
+          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          setUnseen(0);
+        }}
+        className="absolute bottom-4 right-8 z-20 px-3 py-1.5 rounded-full bg-hive-surface border border-hive-lime/50 text-hive-lime text-[11px] font-semibold shadow-xl flex items-center gap-1 hover:bg-hive-surfaceHover"
+        aria-label={unseen > 0 ? `${unseen} new messages, jump to latest` : "Jump to latest"}
+      >
+        <M3Icon name="arrow_downward" size={14} />
+        {unseen > 0 ? `${unseen} new` : "Latest"}
+      </button>
+    )}
     <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 py-6 bg-hive-base select-text">
       <div className="max-w-5xl mx-auto w-full space-y-5">
       {hasOlder && (
@@ -540,6 +561,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
       <div ref={bottomRef} />
       </div>
+    </div>
     </div>
   );
 };
