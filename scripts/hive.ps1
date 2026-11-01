@@ -160,6 +160,29 @@ function Invoke-Scenes {
     }
 }
 
+function Invoke-Build {
+    Write-Host "[HIVE CLI] Compiling Standalone Windows 64-bit Binary..." -ForegroundColor Cyan
+    $buildsDir = Join-Path $ProjectRoot "Builds"
+    if (-not (Test-Path $buildsDir)) {
+        New-Item -ItemType Directory -Force -Path $buildsDir | Out-Null
+    }
+    $targetExe = Join-Path $buildsDir "HIVE.exe"
+    $logFile = Join-Path $ProjectRoot "build_player.log"
+    $unityArgs = "-batchmode -quit -projectPath `"$ProjectRoot`" -buildWindows64Player `"$targetExe`" -logFile `"$logFile`""
+
+    Write-Host "  Target:  $targetExe" -ForegroundColor Gray
+    Write-Host "  Compiling operational scenes, assets, and cybernetic runtime..." -ForegroundColor DarkCyan
+
+    $process = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru -Wait
+    if ($process.ExitCode -eq 0 -and (Test-Path $targetExe)) {
+        $sizeMb = [math]::Round((Get-Item $targetExe).Length / 1MB, 2)
+        Write-Host "[HIVE CLI] SUCCESS: Standalone Windows Binary built! ($sizeMb MB)" -ForegroundColor Green
+        Write-Host "Execute directly via: .\Builds\HIVE.exe or hive launch" -ForegroundColor Cyan
+    } else {
+        Write-Host "[HIVE CLI] ERROR: Player build failed with code $($process.ExitCode). See build_player.log." -ForegroundColor Red
+    }
+}
+
 function Invoke-Doctor {
     Write-Host "[HIVE CLI] Running Agency Health Doctor..." -ForegroundColor Cyan
 
@@ -238,29 +261,36 @@ function Invoke-Launch {
         Write-Host "  [WARN] Watchdog check encountered an issue." -ForegroundColor Yellow
     }
 
-    # 2. Check scene availability
-    $scenePath = Join-Path $ProjectRoot "Assets\Scenes\CommandChamber.unity"
-    if (-not (Test-Path $scenePath)) {
-        Write-Host "  [2/3] Operational scene missing. Rebuilding scenes..." -ForegroundColor Yellow
-        Invoke-Scenes
+    # 2. Check binary
+    $targetExe = Join-Path $ProjectRoot "Builds\HIVE.exe"
+    if (-not (Test-Path $targetExe)) {
+        Write-Host "  [2/3] Standalone player not found. Compiling native executable..." -ForegroundColor Yellow
+        Invoke-Build
     } else {
-        Write-Host "  [2/3] Primary Command Chamber verified." -ForegroundColor Gray
+        Write-Host "  [2/3] Standalone HIVE binary verified." -ForegroundColor Gray
     }
 
-    # 3. Launch Unity
-    Write-Host "  [3/3] Launching H.I.V.E. 3D Agency in Unity Editor..." -ForegroundColor Green
-    $logFile = Join-Path $ProjectRoot "launch.log"
-    $unityArgs = "-projectPath `"$ProjectRoot`" -logFile `"$logFile`""
-    $proc = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru
-    Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. launched! PID: $($proc.Id)" -ForegroundColor Green
-    Write-Host "Active Scene: CommandChamber.unity" -ForegroundColor Cyan
-    Write-Host "12 Autonomous Agents: Standby / Operational" -ForegroundColor DarkCyan
+    # 3. Launch
+    if (Test-Path $targetExe) {
+        Write-Host "  [3/3] Launching standalone H.I.V.E. application..." -ForegroundColor Green
+        $proc = Start-Process -FilePath $targetExe -PassThru
+        Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. active! PID: $($proc.Id)" -ForegroundColor Green
+        Write-Host "Binary: $targetExe" -ForegroundColor Cyan
+        Write-Host "12 Autonomous Agents: Standby / Operational" -ForegroundColor DarkCyan
+    } else {
+        Write-Host "  [3/3] Launching in Unity Editor..." -ForegroundColor Green
+        $logFile = Join-Path $ProjectRoot "launch.log"
+        $unityArgs = "-projectPath `"$ProjectRoot`" -logFile `"$logFile`""
+        $proc = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru
+        Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. launched in Editor! PID: $($proc.Id)" -ForegroundColor Green
+    }
 }
 
 # Main Dispatch
 switch ($Command) {
     "launch"  { Show-Header; Invoke-Launch }
     "run"     { Show-Header; Invoke-Launch }
+    "build"   { Show-Header; Invoke-Build }
     "capture" { Show-Header; Invoke-Capture -ArgsList $RemainingArgs }
     "test"    { Show-Header; Invoke-Test }
     "scenes"  { Show-Header; Invoke-Scenes }
