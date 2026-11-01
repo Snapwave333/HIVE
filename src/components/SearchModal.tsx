@@ -22,6 +22,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(0);
+
+  const openMessage = (m: { id: string; channel_id: number }) => {
+    onNavigateChannel(m.channel_id, m.id);
+    onClose();
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -43,19 +49,26 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
       return;
     }
 
+    let stale = false;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await api.searchUnified(query);
-        setResults(res as unknown as SearchResult);
+        if (!stale) {
+          setResults(res as unknown as SearchResult);
+          setSelected(0);
+        }
       } catch (e) {
         console.error("Search error", e);
       } finally {
-        setLoading(false);
+        if (!stale) setLoading(false);
       }
     }, 200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   if (!isOpen) return null;
@@ -72,10 +85,24 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
             placeholder="Search across messages, 5m tasks, and indexed memory..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              const list = results?.messages ?? [];
+              if (list.length === 0) return;
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                const next = (selected + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length;
+                setSelected(next);
+                document.getElementById(`search-hit-${list[next].id}`)?.scrollIntoView({ block: "nearest" });
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                openMessage(list[Math.min(selected, list.length - 1)]);
+              }
+            }}
+            aria-label="Search messages, tasks and memory"
             className="flex-1 bg-transparent border-none outline-none text-xs text-hive-brightText placeholder-hive-dimText"
           />
           <kbd className="text-[10px] bg-hive-base px-1.5 py-0.5 rounded border border-hive-border text-hive-dimText font-mono">
-            ESC to close
+            ↑↓ Enter · Esc
           </kbd>
         </div>
 
@@ -102,14 +129,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                     <M3Icon name="forum" size={14} className="text-hive-cyan" /> Messages
                   </span>
                   <div className="space-y-1">
-                    {results.messages.map((m) => (
+                    {results.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        {...pressable(() => {
-                          onNavigateChannel(m.channel_id, m.id);
-                          onClose();
-                        }, `Open message from ${m.sender === "user" ? "you" : m.sender} in ${channelLabel(m.channel_id)}`)}
-                        className="p-2 rounded bg-hive-surface hover:bg-hive-surfaceHover border border-hive-border cursor-pointer transition-colors flex items-center justify-between"
+                        id={`search-hit-${m.id}`}
+                        aria-selected={i === selected}
+                        {...pressable(() => openMessage(m), `Open message from ${m.sender === "user" ? "you" : m.sender} in ${channelLabel(m.channel_id)}`)}
+                        onMouseEnter={() => setSelected(i)}
+                        className={`p-2 rounded bg-hive-surface hover:bg-hive-surfaceHover border cursor-pointer transition-colors flex items-center justify-between ${
+                          i === selected ? "border-hive-lime/60" : "border-hive-border"
+                        }`}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center space-x-1.5">
