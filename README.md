@@ -199,6 +199,8 @@ npm test
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
+**Icons:** the app ships a 10 KB subset of Material Symbols Rounded containing only the icons it uses. After adding a new `<M3Icon name="...">`, run `npm run icons` (needs `pip install fonttools brotli`) to regenerate it. `npm test` fails if an icon in the code is missing from the subset.
+
 On Linux, building the backend needs the WebKitGTK dev packages (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`).
 
 ### Project layout
@@ -208,7 +210,7 @@ agents/                  12 agent definitions (JSON)
 app/constitution.json    immutable product invariants
 docs/                    design spec and implementation plan
 public/                  static assets
-scripts/                 hive CLI + constitution validator
+scripts/                 hive CLI, constitution validator, icon subsetter
 src/                     React frontend
 src-tauri/
   src/agents/            persona prompts, mentions, transcripts, replies
