@@ -42,6 +42,7 @@ const HELP_TEXT: &str = "Here's what I can do from the chat box:\n\n\
 * `/deploy <version> <summary>` — snapshot the running UI build as a versioned, hashed bundle (@FORGE)\n\
 * `/rollback` — switch the UI back to the previous verified snapshot (@SENTINEL)\n\
 * `/backup` — take a SQLite snapshot right now\n\
+* `/export` — save this conversation as a Markdown note in your Obsidian vault\n\
 * `/pause` | `/resume` — stop or restart background chatter and task work\n\n\
 Or just talk. Tag people like @FORGE or @SAGE in #agency-hq (up to 3 will answer), or DM anyone directly.";
 
@@ -478,7 +479,7 @@ impl AppState {
 
         let lead = match cmd.as_str() {
             "/help" | "/pause" | "/resume" | "/spawn_temp" | "/debate" => "PRIME",
-            "/backup" | "/obsidian" => "ARCHIVIST",
+            "/backup" | "/obsidian" | "/export" => "ARCHIVIST",
             "/task" => "CONDUCTOR",
             "/deploy" => "FORGE",
             "/rollback" => "SENTINEL",
@@ -505,6 +506,32 @@ impl AppState {
                 Ok(p) => say("ARCHIVIST", format!("☑ Snapshot saved:\n`{}`", p.to_string_lossy())),
                 Err(e) => say("ARCHIVIST", format!("⚠ Backup failed: {}", e)),
             },
+            "/export" => {
+                let label = if channel_id == 0 {
+                    "agency-hq".to_string()
+                } else {
+                    self.db
+                        .get_channel_agent(channel_id)
+                        .ok()
+                        .flatten()
+                        .map(|a| format!("DM with {}", a.display_name))
+                        .unwrap_or_else(|| format!("channel {}", channel_id))
+                };
+                let db = self.db.clone();
+                let res = tokio::task::spawn_blocking(move || -> anyhow::Result<(usize, std::path::PathBuf)> {
+                    let history = db.get_messages(channel_id, 100_000, None)?;
+                    let body = agents::export_markdown(&label, &history);
+                    let title = format!("HIVE {} {}", label, chrono::Utc::now().format("%Y-%m-%d %H%M"));
+                    let path = EcosystemBridges::write_obsidian_note(&title, &body, Some("Exports"))?;
+                    Ok((history.iter().filter(|m| !m.is_deleted).count(), path))
+                })
+                .await;
+                match res {
+                    Ok(Ok((count, path))) => say("ARCHIVIST", format!("Exported {} messages to your vault:\n`{}`", count, path.to_string_lossy())),
+                    Ok(Err(e)) => say("ARCHIVIST", format!("⚠ Export failed: {}", e)),
+                    Err(e) => say("ARCHIVIST", format!("⚠ Export crashed: {}", e)),
+                }
+            }
             "/task" if arg.is_empty() => say("CONDUCTOR", "Give me a goal, like `/task clean up the attachments folder`.".to_string()),
             "/task" => match self.queue_task(&arg, None, Vec::new()).await {
                 Ok(plan) => say("CONDUCTOR", Self::queued_message(&plan)),

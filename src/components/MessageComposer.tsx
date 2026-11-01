@@ -41,6 +41,7 @@ const SLASH_COMMANDS = [
   { cmd: "/deploy ", hint: "snapshot the running UI" },
   { cmd: "/rollback", hint: "previous UI snapshot" },
   { cmd: "/backup", hint: "SQLite snapshot now" },
+  { cmd: "/export", hint: "save this chat to your vault" },
   { cmd: "/pause", hint: "pause background work" },
   { cmd: "/resume", hint: "resume background work" },
   { cmd: "/activate", hint: "rerun the agency check-in" },

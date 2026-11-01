@@ -529,3 +529,25 @@ fn oversized_attachments_are_refused_before_decoding() {
     let ok = "A".repeat(4 * 1024);
     assert!(db.save_attachment("small.bin", "application/octet-stream", &ok).is_ok());
 }
+
+#[test]
+fn exports_are_readable_markdown_without_deleted_messages() {
+    let mut a = msg("user", "Can someone check the build?");
+    a.created_at = "2026-11-01T08:00:00+00:00".to_string();
+    let mut b = msg("FORGE", "On it, **green** now.");
+    b.created_at = "2026-11-01T08:01:00+00:00".to_string();
+    b.is_edited = true;
+    let mut gone = msg("user", "oops");
+    gone.is_deleted = true;
+    let mut c = msg("user", "");
+    c.attachments = Some(r#"[{"hash":"h","filename":"log.txt","mime_type":"text/plain","size_bytes":2048}]"#.to_string());
+
+    let md = agents::export_markdown("agency-hq", &[a, b, gone, c]);
+    assert!(md.starts_with("# agency-hq"));
+    assert!(md.contains("3 messages"));
+    assert!(md.contains("**Owner** · 2026-11-01 08:00"));
+    assert!(md.contains("**@FORGE** · 2026-11-01 08:01 · edited"));
+    assert!(md.contains("On it, **green** now."));
+    assert!(md.contains("📎 log.txt (2 KB)"));
+    assert!(!md.contains("oops"));
+}

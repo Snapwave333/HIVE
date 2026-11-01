@@ -480,6 +480,25 @@ pub fn should_notify(setting: Option<&str>, channel_id: i64, sender: &str, windo
     setting == Some("dms") && channel_id > 0 && sender != "user" && !window_active
 }
 
+pub fn export_markdown(channel_label: &str, messages: &[Message]) -> String {
+    let mut out = format!("# {}\n\nExported from H.I.V.E. on {}. {} messages.\n", channel_label, Utc::now().format("%Y-%m-%d %H:%M UTC"), messages.iter().filter(|m| !m.is_deleted).count());
+    for m in messages.iter().filter(|m| !m.is_deleted) {
+        let who = if m.sender == "user" { "Owner".to_string() } else { format!("@{}", m.sender) };
+        let when = chrono::DateTime::parse_from_rfc3339(&m.created_at)
+            .map(|d| d.with_timezone(&Utc).format("%Y-%m-%d %H:%M").to_string())
+            .unwrap_or_else(|_| m.created_at.clone());
+        out.push_str(&format!("\n---\n\n**{}** · {}{}\n\n", who, when, if m.is_edited { " · edited" } else { "" }));
+        if !m.content.trim().is_empty() {
+            out.push_str(m.content.trim());
+            out.push('\n');
+        }
+        for a in parse_attachments(m.attachments.as_deref()) {
+            out.push_str(&format!("\n📎 {} ({})\n", a.filename, human_size(a.size_bytes)));
+        }
+    }
+    out
+}
+
 pub fn post_message(
     db: &Database,
     events: &EventBus,
