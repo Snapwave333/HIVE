@@ -13,6 +13,7 @@ interface MessageComposerProps {
 }
 
 const MAX_ATTACHMENTS = 6;
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 const KAOMOJIS = [
   "(ง'̀-'́)ง",
@@ -97,8 +98,13 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     const room = MAX_ATTACHMENTS - attachments.length;
     const batch = files.slice(0, Math.max(0, room));
     if (batch.length < files.length) setUploadError(`Up to ${MAX_ATTACHMENTS} files per message.`);
-    setUploading((n) => n + batch.length);
-    for (const file of batch) {
+    const tooBig = batch.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
+    if (tooBig.length > 0) {
+      setUploadError(`${tooBig.map((f) => f.name).join(", ")} ${tooBig.length === 1 ? "is" : "are"} over the 25 MB limit.`);
+    }
+    const accepted = batch.filter((f) => f.size <= MAX_ATTACHMENT_BYTES);
+    setUploading((n) => n + accepted.length);
+    for (const file of accepted) {
       const rec = await onUploadFile(file);
       setUploading((n) => n - 1);
       if (rec) {

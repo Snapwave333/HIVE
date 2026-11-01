@@ -28,6 +28,7 @@ const AGENT_JSONS: &[(&str, &str)] = &[
 ];
 
 pub const BACKUP_RETENTION: usize = 14;
+pub const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct Database {
@@ -725,6 +726,13 @@ impl Database {
             Some(idx) => &data_base64[idx + 1..],
             None => data_base64,
         };
+        if clean_b64.len() / 4 * 3 > MAX_ATTACHMENT_BYTES + 3 {
+            anyhow::bail!(
+                "{} is too large (limit is {} MB)",
+                filename,
+                MAX_ATTACHMENT_BYTES / (1024 * 1024)
+            );
+        }
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(clean_b64.trim())
             .context("Attachment data is not valid base64")?;

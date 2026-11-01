@@ -519,3 +519,13 @@ fn cli_bridge_rejects_shell_metacharacters_before_spawning() {
     let err = EcosystemBridges::gog_cli_exec(&["format", "c:"]).unwrap_err().to_string();
     assert!(err.contains("allowlist"));
 }
+
+#[test]
+fn oversized_attachments_are_refused_before_decoding() {
+    let db = Database::new_in_memory().unwrap();
+    let huge = "A".repeat((hive_lib::db::MAX_ATTACHMENT_BYTES / 3 + 10) * 4);
+    let err = db.save_attachment("big.bin", "application/octet-stream", &huge).unwrap_err().to_string();
+    assert!(err.contains("too large"), "got: {}", err);
+    let ok = "A".repeat(4 * 1024);
+    assert!(db.save_attachment("small.bin", "application/octet-stream", &ok).is_ok());
+}
