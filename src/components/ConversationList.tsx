@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Channel, Agent, Message, TaskChunk } from "../types";
 import { TaskCard } from "./TaskCard";
 import { M3Icon } from "./M3Icon";
+import { pressable } from "../utils/a11y";
 
 interface ConversationListProps {
   channels: Channel[];
@@ -199,7 +200,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 <M3Icon name="keep" filled size={12} className="text-hive-lime" /> Pinned Town Square
               </div>
               <div
-                onClick={() => onSelectChannel(0)}
+                {...pressable(() => onSelectChannel(0), `#agency-hq${unreadCounts[0] ? `, ${unreadCounts[0]} unread` : ""}`)}
+                aria-current={activeChannelId === 0 ? "page" : undefined}
                 className={`p-3 rounded-xl cursor-pointer transition-all flex items-start space-x-3 relative border ${
                   activeChannelId === 0
                     ? "bg-hive-surface border-hive-lime/40"
@@ -263,7 +265,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 return (
                   <div
                     key={channel.id}
-                    onClick={() => onSelectChannel(channel.id)}
+                    {...pressable(
+                      () => onSelectChannel(channel.id),
+                      `${channel.name}, ${agent?.role ?? ""}${unreadCounts[channel.id] ? `, ${unreadCounts[channel.id]} unread` : ""}`
+                    )}
+                    aria-current={isActive ? "page" : undefined}
                     className={`px-3 py-2.5 rounded-xl cursor-pointer transition-all flex items-start space-x-3 relative border ${
                       isActive
                         ? "bg-hive-surface border-hive-lime/40"

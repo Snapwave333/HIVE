@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { M3Icon } from "./M3Icon";
+import { pressable } from "../utils/a11y";
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -104,10 +105,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                     {results.messages.map((m) => (
                       <div
                         key={m.id}
-                        onClick={() => {
+                        {...pressable(() => {
                           onNavigateChannel(m.channel_id, m.id);
                           onClose();
-                        }}
+                        }, `Open message from ${m.sender === "user" ? "you" : m.sender} in ${channelLabel(m.channel_id)}`)}
                         className="p-2 rounded bg-hive-surface hover:bg-hive-surfaceHover border border-hive-border cursor-pointer transition-colors flex items-center justify-between"
                       >
                         <div className="min-w-0 flex-1">
