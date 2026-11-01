@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEngine;
 using HIVE.Core;
 using HIVE.Persistence;
+using HIVE.Agents;
 
 namespace HIVE.Tasks
 {
@@ -97,9 +98,9 @@ namespace HIVE.Tasks
                 ["AwaitingApproval"] = new[] { "InProgress", "Blocked", "Failed" },
                 ["Review"] = new[] { "Completed", "Verified", "InProgress", "Failed" },
                 ["Completed"] = new[] { "Verified", "InProgress" },
-                ["Verified"] = new[] { }, // Terminal
+                ["Verified"] = new string[] { }, // Terminal
                 ["Failed"] = new[] { "InProgress", "Cancelled" },
-                ["Cancelled"] = new[] { } // Terminal
+                ["Cancelled"] = new string[] { } // Terminal
             };
 
             lock (_lock)

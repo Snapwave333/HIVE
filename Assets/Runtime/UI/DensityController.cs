@@ -92,8 +92,7 @@ namespace HIVE.UI
             // Apply to UI Toolkit stylesheet
             if (_rootStyle != null)
             {
-                _rootStyle.style.setProperty("--panel-spacing", _activeConfig.PanelSpacing);
-                _rootStyle.style.setProperty("--font-size", _activeConfig.FontSize);
+                _rootStyle.style.fontSize = _activeConfig.FontSize;
                 _rootStyle.EnableInClassList("dense", mode == DensityMode.Dense);
                 _rootStyle.EnableInClassList("comfortable", mode == DensityMode.Comfortable);
                 _rootStyle.EnableInClassList("focus", mode == DensityMode.Focus);

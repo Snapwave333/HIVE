@@ -111,7 +111,7 @@ namespace HIVE.LLM
             public double slow_until { get; set; }
         }
 
-        private class ClaudeHealth
+        public class ClaudeHealth
         {
             public bool ok { get; set; }
             public int status { get; set; }
@@ -238,12 +238,13 @@ namespace HIVE.LLM
         private static string GetEnv(string name)
         {
             var v = Environment.GetEnvironmentVariable(name);
-            if (string.IsNullOrEmpty(v) && OperatingSystem.IsWindows())
+            if (string.IsNullOrEmpty(v))
             {
                 try
                 {
-                    using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Environment");
-                    v = key?.GetValue(name) as string;
+                    v = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
+                    if (string.IsNullOrEmpty(v))
+                        v = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
                 }
                 catch { }
             }
@@ -494,7 +495,7 @@ namespace HIVE.LLM
             var lastError = "no model tried";
             foreach (var model in OrderModels(models))
             {
-                var think = !shortCall;
+                bool? think = !shortCall;
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     var left = deadlineTime - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -626,7 +627,7 @@ namespace HIVE.LLM
             SaveState();
         }
 
-        private static string[] GetCascade(string kind = "text")
+        public static string[] GetCascade(string kind = "text")
         {
             var builtin = kind == "text" ? NIM_TEXT : NIM_VISION;
             if (Environment.GetEnvironmentVariable("HIVE_LLM_TEST") != null) return builtin;
@@ -881,7 +882,7 @@ namespace HIVE.LLM
             {
                 var err = JsonDocument.Parse(responseJson);
                 var errMsg = err.RootElement.GetProperty("error").GetProperty("message").GetString() ?? "unknown";
-                throw new HttpRequestException(errMsg) { StatusCode = response.StatusCode };
+                throw new HttpException(errMsg, response.StatusCode);
             }
 
             var doc = JsonDocument.Parse(responseJson);
@@ -894,9 +895,18 @@ namespace HIVE.LLM
             return text;
         }
 
+        public class HttpException : HttpRequestException
+        {
+            public System.Net.HttpStatusCode StatusCode { get; set; }
+            public HttpException(string message, System.Net.HttpStatusCode statusCode) : base(message)
+            {
+                StatusCode = statusCode;
+            }
+        }
+
         private static int GetHttpStatus(Exception e)
         {
-            if (e is HttpRequestException hr && hr.StatusCode.HasValue) return (int)hr.StatusCode.Value;
+            if (e is HttpException hr) return (int)hr.StatusCode;
             return 0;
         }
 
@@ -941,7 +951,7 @@ namespace HIVE.LLM
                     var body = new ChatRequest
                     {
                         model = m,
-                        messages = new[] { new ChatMessage { role = "user", content = "Reply with exactly: CDN OK" } },
+                        messages = new List<ChatMessage> { new ChatMessage { role = "user", content = "Reply with exactly: CDN OK" } },
                         max_tokens = 20 + REASONING_ROOM,
                         temperature = 0.2,
                         chat_template_kwargs = new Dictionary<string, object> { { "enable_thinking", false } }
@@ -951,18 +961,19 @@ namespace HIVE.LLM
                     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
                     request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-                    var t0 = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    var t0 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     for (int retry = 0; retry < 2; retry++)
                     {
                         try
                         {
                             var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                             var responseJson = await response.Content.ReadAsStringAsync();
+                            var durationSec = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - t0) / 1000.0;
                             if (response.IsSuccessStatusCode)
                             {
                                 var chatResponse = JsonSerializer.Deserialize<ChatResponse>(responseJson);
                                 var txt = StripThink(chatResponse.choices[0].message.content);
-                                return (m, !string.IsNullOrEmpty(txt), DateTimeOffset.UtcNow.ToUnixTimeSeconds() - t0, txt?.Substring(0, Math.Min(30, txt.Length)) ?? "empty");
+                                return (m, !string.IsNullOrEmpty(txt), durationSec, txt?.Substring(0, Math.Min(30, txt.Length)) ?? "empty");
                             }
                             if ((int)response.StatusCode == 400 && body.chat_template_kwargs != null)
                             {
@@ -971,24 +982,26 @@ namespace HIVE.LLM
                                 request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
                                 continue;
                             }
-                            return (m, false, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - t0, $"HTTP {(int)response.StatusCode}");
+                            return (m, false, durationSec, $"HTTP {(int)response.StatusCode}");
                         }
                         catch (Exception e)
                         {
-                            return (m, false, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - t0, e.GetType().Name);
+                            var durationSec = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - t0) / 1000.0;
+                            return (m, false, durationSec, e.GetType().Name);
                         }
                     }
-                    return (m, false, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - t0, "HTTP 400");
+                    var finalDuration = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - t0) / 1000.0;
+                    return (m, false, finalDuration, "HTTP 400");
                 }
                 finally { semaphore.Release(); }
             });
 
             var allResults = await Task.WhenAll(tasks);
-            foreach (var (m, ok, s, note) in allResults.OrderBy(r => (!r.ok, r.seconds)))
+            foreach (var r in allResults.OrderBy(x => (!x.Item2, x.Item3)))
             {
-                if (ok) RecordHealth(m, true, s);
-                else if (!note.StartsWith("HTTP 4") || note == "HTTP 429") RecordHealth(m, false, s, note);
-                results.Add((m, ok, s, note));
+                if (r.Item2) RecordHealth(r.Item1, true, r.Item3);
+                else if (!r.Item4.StartsWith("HTTP 4") || r.Item4 == "HTTP 429") RecordHealth(r.Item1, false, r.Item3, r.Item4);
+                results.Add((r.Item1, r.Item2, r.Item3, r.Item4));
             }
             return results;
         }

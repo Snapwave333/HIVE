@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using HIVE.Core;
@@ -20,8 +21,8 @@ namespace HIVE.UI
 
         [Header("Quiet Periods")]
         public bool EnableQuietPeriods = true;
-        public TimeSpan QuietStart = new TimeSpan(22, 0, 0); // 10 PM
-        public TimeSpan QuietEnd = new TimeSpan(7, 0, 0);    // 7 AM
+        [System.NonSerialized] public TimeSpan QuietStart = new TimeSpan(22, 0, 0); // 10 PM
+        [System.NonSerialized] public TimeSpan QuietEnd = new TimeSpan(7, 0, 0);    // 7 AM
 
         [Header("Mute Lists")]
         public List<string> MutedAgents = new();
@@ -159,7 +160,7 @@ namespace HIVE.UI
             if (_historyPanel == null) return;
             _historyPanel.Clear();
 
-            foreach (var n in _history.AsEnumerable().Reverse().Take(50))
+            foreach (var n in Enumerable.Reverse(_history).Take(50))
             {
                 var item = new VisualElement();
                 item.AddToClassList("history-item");
@@ -194,7 +195,7 @@ namespace HIVE.UI
 
         public void UnmuteProject(string projectId) => MutedProjects.Remove(projectId);
 
-        public List<Notification> GetHistory(int count = 100) => _history.TakeLast(count).ToList();
+        public List<Notification> GetHistory(int count = 100) => _history.Skip(Math.Max(0, _history.Count - count)).ToList();
 
         [Serializable]
         public class Notification

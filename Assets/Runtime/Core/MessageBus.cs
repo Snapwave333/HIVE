@@ -140,50 +140,57 @@ namespace HIVE.Core
             }
         }
 
-        private class Envelope
+        public class Envelope
         {
             public string Type { get; set; }
             public string Json { get; set; }
+        }
+
+        public interface IMessage
+        {
+            string MessageId { get; set; }
+            DateTime Timestamp { get; set; }
+            string SourceAgent { get; set; }
+            string TargetAgent { get; set; } // null = broadcast
+        }
+
+        public interface IRequest<TResponse> : IMessage where TResponse : class, IResponse
+        {
+            string CorrelationId { get; set; }
+        }
+
+        public interface IResponse : IMessage
+        {
+            string CorrelationId { get; set; }
+            bool Success { get; set; }
+            string Error { get; set; }
+        }
+
+        public interface IMessagePersister
+        {
+            Task PersistAsync(IReadOnlyList<Envelope> messages);
         }
     }
 
     /// <summary>
     /// Base interface for all bus messages.
     /// </summary>
-    public interface IMessage
-    {
-        string MessageId { get; set; }
-        DateTime Timestamp { get; set; }
-        string SourceAgent { get; set; }
-        string TargetAgent { get; set; } // null = broadcast
-    }
+    public interface IMessage : MessageBus.IMessage { }
 
     /// <summary>
     /// Request message expecting a response.
     /// </summary>
-    public interface IRequest<TResponse> : IMessage where TResponse : class, IResponse { }
+    public interface IRequest<TResponse> : MessageBus.IRequest<TResponse> where TResponse : class, MessageBus.IResponse { }
 
     /// <summary>
     /// Response message correlated to a request.
     /// </summary>
-    public interface IResponse : IMessage
-    {
-        string CorrelationId { get; set; }
-        bool Success { get; set; }
-        string Error { get; set; }
-    }
+    public interface IResponse : MessageBus.IResponse { }
 
     /// <summary>
     /// Persistence abstraction for message durability.
     /// </summary>
-    public interface IMessagePersister
-    {
-        Task PersistAsync(IReadOnlyList<Envelope> messages);
-    }
+    public interface IMessagePersister : MessageBus.IMessagePersister { }
 
-    internal class Envelope
-    {
-        public string Type { get; set; }
-        public string Json { get; set; }
-    }
+    public class Envelope : MessageBus.Envelope { }
 }

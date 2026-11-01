@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using UnityEngine;
 using HIVE.Core;
 using HIVE.Persistence;
@@ -14,6 +15,8 @@ namespace HIVE.Agents
     /// </summary>
     public class AgentSpawner : MonoBehaviour
     {
+        public static AgentSpawner Instance { get; private set; }
+
         [Header("Configuration")]
         public string AgentsPath = "Assets/StreamingAssets/agents";
         public GameObject AgentWorkspacePrefab;
@@ -25,8 +28,14 @@ namespace HIVE.Agents
 
         public IReadOnlyDictionary<string, AgentInstance> Agents => _agents;
 
+        private void Awake()
+        {
+            if (Instance == null) Instance = this;
+        }
+
         public async void Initialize(Repository repository)
         {
+            Instance = this;
             _repository = repository;
             _persister = new SqlitePersister(_repository);
             MessageBus.Initialize(_persister);

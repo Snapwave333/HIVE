@@ -251,14 +251,14 @@ namespace HIVE.Editor.ModelLab
                     else if ((int)response.StatusCode == 400)
                     {
                         // Retry without chat_template_kwargs
-                        body = new
+                        var retryBody = new
                         {
                             model = model,
                             messages = new[] { new { role = "user", content = prompt } },
                             max_tokens = _testTokens,
                             temperature = 0.6
                         };
-                        jsonBody = JsonSerializer.Serialize(body);
+                        jsonBody = JsonSerializer.Serialize(retryBody);
                         request.Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
                         response = await HttpClient.SendAsync(request);
                         responseJson = await response.Content.ReadAsStringAsync();
@@ -347,12 +347,13 @@ namespace HIVE.Editor.ModelLab
         private string GetEnv(string name)
         {
             var v = Environment.GetEnvironmentVariable(name);
-            if (string.IsNullOrEmpty(v) && OperatingSystem.IsWindows())
+            if (string.IsNullOrEmpty(v))
             {
                 try
                 {
-                    using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Environment");
-                    v = key?.GetValue(name) as string;
+                    v = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
+                    if (string.IsNullOrEmpty(v))
+                        v = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
                 }
                 catch { }
             }

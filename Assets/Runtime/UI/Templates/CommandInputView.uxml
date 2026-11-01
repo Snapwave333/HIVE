@@ -1,0 +1,22 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="../Styles/HiveHUD.uss" />
+    <ui:VisualElement name="command-container" class="hive-panel command-bar">
+        <ui:VisualElement class="cyber-header">
+            <ui:Label text="[H.I.V.E. // COMMAND SHELL]" class="cyber-title" />
+            <ui:Label name="context-badge" text="Agency" class="cyber-badge" style="margin-left: 10px;" />
+            <ui:VisualElement style="flex-grow: 1;" />
+            <ui:DropdownField name="context-dropdown" label="Context" style="width: 160px;" />
+            <ui:Button name="mode-button" text="Chat" style="margin-left: 6px;" />
+            <ui:Button name="voice-button" text="🎙️ Voice" style="margin-left: 6px;" />
+            <ui:Button name="attach-button" text="📎 Attach" style="margin-left: 6px;" />
+        </ui:VisualElement>
+        
+        <ui:ListView name="message-list" style="flex-grow: 1; margin-bottom: 8px;" />
+        
+        <ui:VisualElement name="attachments-container" style="flex-direction: row; flex-wrap: wrap; margin-bottom: 4px;" />
+        
+        <ui:VisualElement style="flex-direction: row; align-items: center;">
+            <ui:TextField name="command-input" placeholder-text="Enter directive or @AGENT command... (e.g. @PRIME status, /project, /terminal)" style="flex-grow: 1;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -4,6 +4,9 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using HIVE.Core;
+using HIVE.Tasks;
+using HIVE.Camera;
+using HIVE.Agents;
 
 namespace HIVE.UI
 {
@@ -40,24 +43,31 @@ namespace HIVE.UI
         private Coroutine _searchCoroutine;
         private bool _expanded = true;
 
+        public static NavSidebar Instance { get; private set; }
+
         private void Awake()
         {
-            _root = UIDocument.rootVisualElement;
-            if (SidebarTemplate != null)
-                SidebarTemplate.CloneTree(_root);
+            if (Instance == null) Instance = this;
+            if (UIDocument == null) UIDocument = GetComponent<UIDocument>();
+            if (UIDocument != null)
+            {
+                _root = UIDocument.rootVisualElement;
+                if (SidebarTemplate != null)
+                    SidebarTemplate.CloneTree(_root);
 
-            _sidebar = _root.Q<VisualElement>("sidebar");
-            _searchField = _root.Q<TextField>("search-field");
-            _navList = _root.Q<ListView>("nav-list");
-            _searchResults = _root.Q<ListView>("search-results");
-            _searchResultsContainer = _root.Q<VisualElement>("search-results-container");
-            _toggleButton = _root.Q<Button>("toggle-button");
-            _agentCountLabel = _root.Q<Label>("agent-count");
-            _taskCountLabel = _root.Q<Label>("task-count");
-            _alertCountLabel = _root.Q<Label>("alert-count");
+                _sidebar = _root.Q<VisualElement>("sidebar");
+                _searchField = _root.Q<TextField>("search-field");
+                _navList = _root.Q<ListView>("nav-list");
+                _searchResults = _root.Q<ListView>("search-results");
+                _searchResultsContainer = _root.Q<VisualElement>("search-results-container");
+                _toggleButton = _root.Q<Button>("toggle-button");
+                _agentCountLabel = _root.Q<Label>("agent-count");
+                _taskCountLabel = _root.Q<Label>("task-count");
+                _alertCountLabel = _root.Q<Label>("alert-count");
 
-            SetupSections();
-            SetupUI();
+                SetupSections();
+                SetupUI();
+            }
         }
 
         private void SetupSections()
@@ -310,7 +320,7 @@ namespace HIVE.UI
             var input = CommandInput.Instance;
             if (input != null)
             {
-                input._inputField.value = cmd;
+                input.SetInputText(cmd);
                 input.SubmitCommand();
             }
         }

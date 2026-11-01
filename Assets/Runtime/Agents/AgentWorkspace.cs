@@ -6,6 +6,8 @@ using HIVE.Core;
 using HIVE.LLM;
 using HIVE.Tasks;
 using HIVE.Memory;
+using HIVE.Persistence;
+using HIVE.UI;
 
 namespace HIVE.Agents
 {
@@ -15,7 +17,7 @@ namespace HIVE.Agents
     public class AgentWorkspace : MonoBehaviour
     {
         [Header("Agent Definition")]
-        public AgentSpawner.AgentDefinition Definition;
+        public AgentDefinition Definition;
 
         [Header("UI")]
         public UIDocument UIDocument;
@@ -43,7 +45,7 @@ namespace HIVE.Agents
         private readonly List<TaskRecord> _activeTasks = new();
         private Coroutine _statusUpdateCoroutine;
 
-        public void Initialize(AgentSpawner.AgentDefinition def)
+        public void Initialize(AgentDefinition def)
         {
             Definition = def;
             _instance = AgentSpawner.Instance?.Agents.GetValueOrDefault(def.Codename);
@@ -55,6 +57,8 @@ namespace HIVE.Agents
 
         private void SetupUI()
         {
+            if (UIDocument == null) UIDocument = GetComponent<UIDocument>();
+            if (UIDocument == null) return;
             _root = UIDocument.rootVisualElement;
             if (WorkspaceTemplate != null)
                 WorkspaceTemplate.CloneTree(_root);
@@ -78,8 +82,11 @@ namespace HIVE.Agents
             _taskList.bindItem = (e, i) =>
             {
                 var task = _activeTasks[i];
-                e.text = $"[{task.State}] {task.Title}";
-                e.tooltip = task.Description;
+                if (e is Label lbl)
+                {
+                    lbl.text = $"[{task.State}] {task.Title}";
+                    lbl.tooltip = task.Description;
+                }
             };
             _taskList.itemsSource = _activeTasks;
         }
@@ -157,7 +164,7 @@ namespace HIVE.Agents
             if (CommandInput.Instance != null)
             {
                 CommandInput.Instance.SetContext($"Agent:{Definition.Codename}");
-                CommandInput.Instance._inputField.Focus();
+                CommandInput.Instance.FocusInput();
             }
         }
 

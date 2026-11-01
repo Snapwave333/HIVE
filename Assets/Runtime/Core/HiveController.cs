@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using HIVE.Core;
@@ -49,6 +50,9 @@ namespace HIVE.Core
         public AdaptiveCamera AdaptiveCamera { get; private set; }
         public DensityController DensityController { get; private set; }
         public NotificationCenter NotificationCenter { get; private set; }
+        public HIVE.Security.SecurityGate SecurityGate { get; private set; }
+        public HIVE.Skills.SkillRegistry SkillRegistry { get; private set; }
+        public HIVE.Voice.VoiceController VoiceController { get; private set; }
 
         public bool IsInitialized { get; private set; }
 
@@ -85,7 +89,10 @@ namespace HIVE.Core
             // 5. Memory system
             yield return InitializeMemory();
 
-            // 6. UI systems
+            // 6. Security & Skills
+            yield return InitializeSecurityAndSkills();
+
+            // 7. UI systems
             yield return InitializeUI();
 
             // 7. Camera system
@@ -151,6 +158,27 @@ namespace HIVE.Core
             yield return null;
         }
 
+        private IEnumerator InitializeSecurityAndSkills()
+        {
+            Debug.Log("[HIVE] Initializing SecurityGate, SkillRegistry, and VoiceController...");
+            var secGO = new GameObject("SecurityGate");
+            secGO.transform.SetParent(transform);
+            SecurityGate = secGO.AddComponent<HIVE.Security.SecurityGate>();
+            SecurityGate.Initialize(Repository);
+
+            var skillGO = new GameObject("SkillRegistry");
+            skillGO.transform.SetParent(transform);
+            SkillRegistry = skillGO.AddComponent<HIVE.Skills.SkillRegistry>();
+            SkillRegistry.Initialize(Repository);
+
+            var voiceGO = new GameObject("VoiceController");
+            voiceGO.transform.SetParent(transform);
+            voiceGO.AddComponent<AudioSource>();
+            VoiceController = voiceGO.AddComponent<HIVE.Voice.VoiceController>();
+
+            yield return null;
+        }
+
         private IEnumerator InitializeUI()
         {
             Debug.Log("[HIVE] Initializing UI systems...");
@@ -201,8 +229,8 @@ namespace HIVE.Core
                 camGO = new GameObject("AdaptiveCamera");
                 camGO.transform.SetParent(transform);
                 AdaptiveCamera = camGO.AddComponent<AdaptiveCamera>();
-                if (Camera.main != null)
-                    AdaptiveCamera.CameraTransform = Camera.main.transform;
+                if (UnityEngine.Camera.main != null)
+                    AdaptiveCamera.CameraTransform = UnityEngine.Camera.main.transform;
             }
             yield return null;
         }
@@ -232,7 +260,7 @@ namespace HIVE.Core
             // Request initial agent status
             if (AgentSpawner != null)
             {
-                var req = new AgentSpawner.AgentStatusRequest
+                var req = new AgentStatusRequest
                 {
                     CorrelationId = Guid.NewGuid().ToString(),
                     SourceAgent = "HIVE_CONTROLLER"
@@ -244,7 +272,7 @@ namespace HIVE.Core
             ScheduleDailyBriefing();
 
             // Log startup
-            Repository?.WriteAudit(new Repository.AuditEntry
+            Repository?.WriteAudit(new AuditEntry
             {
                 EventType = "system_startup",
                 Actor = "HIVE_CONTROLLER",
@@ -325,6 +353,9 @@ namespace HIVE.Core
                 case nameof(AdaptiveCamera): return AdaptiveCamera as T;
                 case nameof(DensityController): return DensityController as T;
                 case nameof(NotificationCenter): return NotificationCenter as T;
+                case nameof(HIVE.Security.SecurityGate): return SecurityGate as T;
+                case nameof(HIVE.Skills.SkillRegistry): return SkillRegistry as T;
+                case nameof(HIVE.Voice.VoiceController): return VoiceController as T;
             }
             return null;
         }

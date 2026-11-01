@@ -7,6 +7,7 @@ using UnityEngine.UIElements;
 using HIVE.Core;
 using HIVE.LLM;
 using HIVE.Tasks;
+using HIVE.Agents;
 
 namespace HIVE.UI
 {
@@ -17,6 +18,8 @@ namespace HIVE.UI
     [RequireComponent(typeof(UIDocument))]
     public class CommandInput : MonoBehaviour
     {
+        public static CommandInput Instance { get; private set; }
+
         public enum InputMode { Chat, Terminal, Voice }
 
         [Header("UI References")]
@@ -56,20 +59,25 @@ namespace HIVE.UI
 
         private void Awake()
         {
-            _root = UIDocument.rootVisualElement;
-            if (CommandInputTemplate != null)
-                CommandInputTemplate.CloneTree(_root);
+            if (Instance == null) Instance = this;
+            if (UIDocument == null) UIDocument = GetComponent<UIDocument>();
+            if (UIDocument != null)
+            {
+                _root = UIDocument.rootVisualElement;
+                if (CommandInputTemplate != null)
+                    CommandInputTemplate.CloneTree(_root);
 
-            _inputField = _root.Q<TextField>("command-input");
-            _messageList = _root.Q<ListView>("message-list");
-            _contextDropdown = _root.Q<DropdownField>("context-dropdown");
-            _modeButton = _root.Q<Button>("mode-button");
-            _voiceButton = _root.Q<Button>("voice-button");
-            _attachButton = _root.Q<Button>("attach-button");
-            _attachmentsContainer = _root.Q<VisualElement>("attachments-container");
-            _contextBadge = _root.Q<Label>("context-badge");
+                _inputField = _root.Q<TextField>("command-input");
+                _messageList = _root.Q<ListView>("message-list");
+                _contextDropdown = _root.Q<DropdownField>("context-dropdown");
+                _modeButton = _root.Q<Button>("mode-button");
+                _voiceButton = _root.Q<Button>("voice-button");
+                _attachButton = _root.Q<Button>("attach-button");
+                _attachmentsContainer = _root.Q<VisualElement>("attachments-container");
+                _contextBadge = _root.Q<Label>("context-badge");
 
-            SetupUI();
+                SetupUI();
+            }
         }
 
         private void SetupUI()
@@ -106,7 +114,8 @@ namespace HIVE.UI
 
         private void ToggleFocus()
         {
-            var focused = _inputField.HasFocus();
+            if (_inputField == null) return;
+            var focused = _inputField.focusController?.focusedElement == _inputField;
             if (focused) _inputField.Blur(); else _inputField.Focus();
         }
 
@@ -149,7 +158,17 @@ namespace HIVE.UI
             ShowAutoComplete();
         }
 
-        private void SubmitCommand()
+        public void SetInputText(string text)
+        {
+            if (_inputField != null) _inputField.value = text;
+        }
+
+        public void FocusInput()
+        {
+            _inputField?.Focus();
+        }
+
+        public void SubmitCommand()
         {
             var text = _inputField.value.Trim();
             if (string.IsNullOrEmpty(text)) return;
@@ -387,7 +406,7 @@ namespace HIVE.UI
         private void ListAgents()
         {
             // Request agent status via message bus
-            var req = new AgentSpawner.AgentStatusRequest
+            var req = new AgentStatusRequest
             {
                 CorrelationId = Guid.NewGuid().ToString(),
                 SourceAgent = "COMMAND_INPUT"
@@ -404,7 +423,7 @@ namespace HIVE.UI
 
         private void SetDensity(string mode)
         {
-            if (Enum.TryParse<DensityMode>(mode, true, out var dm))
+            if (Enum.TryParse<DensityController.DensityMode>(mode, true, out var dm))
             {
                 // Notify DensityController
                 AddMessage(new MessageItem { Type = MessageType.System, Content = $"Density set to {dm}", Timestamp = DateTime.Now });
@@ -470,7 +489,7 @@ namespace HIVE.UI
             }
         }
 
-        private void SetContext(string context)
+        public void SetContext(string context)
         {
             _activeContext = context;
             UpdateContextUI();

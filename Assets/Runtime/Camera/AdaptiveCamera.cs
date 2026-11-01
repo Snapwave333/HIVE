@@ -11,6 +11,7 @@ namespace HIVE.Camera
     /// </summary>
     public class AdaptiveCamera : MonoBehaviour
     {
+        public static AdaptiveCamera Instance { get; private set; }
         public enum CameraMode
         {
             FirstPerson,
@@ -68,7 +69,8 @@ namespace HIVE.Camera
 
         private void Awake()
         {
-            if (CameraTransform == null) CameraTransform = Camera.main?.transform;
+            if (Instance == null) Instance = this;
+            if (CameraTransform == null) CameraTransform = UnityEngine.Camera.main?.transform;
             _targetMode = _currentMode;
             ApplyModeImmediate(_currentMode);
         }
