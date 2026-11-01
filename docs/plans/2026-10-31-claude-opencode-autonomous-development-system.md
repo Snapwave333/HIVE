@@ -1,6 +1,6 @@
 # Claude Code + OpenCode Autonomous Development System Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Execution note:** Implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a robust, enterprise-grade Coding Orchestration Layer for all 12 H.I.V.E. agents, pairing Claude Code CLI as the primary engine with OpenCode CLI as an automatic free fallback, backed by an out-of-process Python recovery supervisor enforcing a fail-closed Tiered Autonomy Deployment Policy with compare-and-swap Git ref rollback.
 
@@ -78,11 +78,11 @@ Assets/Editor/
   `opencode --version`
 
 - [ ] **Step 3: Document baseline environment manifest**
-  Record baseline git commit SHA, active branches, and test identifiers in `docs/superpowers/specs/baseline_inventory.json`.
+  Record baseline git commit SHA, active branches, and test identifiers in `docs/specs/baseline_inventory.json`.
 
 - [ ] **Step 4: Commit baseline audit documentation**
   ```bash
-  git add docs/superpowers/specs/baseline_inventory.json
+  git add docs/specs/baseline_inventory.json
   git commit -m "chore(audit): establish baseline test and CLI inventory manifest"
   ```
 
@@ -367,3 +367,4 @@ Assets/Editor/
 3. **Fail-Closed Security**: Any attempt to touch `scripts/recovery/` or `.hive/recovery/` is hard-rejected.
 4. **Compare-and-Swap Rollback**: Target ref verified before and after rollback; no `git reset --hard` performed.
 5. **No Broken Builds**: Every deployment candidate runs the test suite; failed candidates are quarantined to `.hive/quarantine/`.
+
