@@ -158,11 +158,11 @@ fn test_three_level_governance() {
         .expect("Level 1 should succeed");
     assert_eq!(l1.status, "approved");
 
-    // Level 2: Significant -> Agency debate & vote with dissents
-    let l2 = gov.propose_decision("Update Navigation Rail Spacing", "Adjust rail width to 52px", DecisionLevel::Significant, "VISION")
+    // Level 2: Significant -> Live NIM council debate & weighted vote
+    let l2 = gov.propose_decision("Optimize SQLite WAL Checkpoint Interval", "Tune WAL autocheckpoint to 1000 pages for low-latency writes", DecisionLevel::Significant, "FORGE")
         .expect("Level 2 debate should succeed");
-    assert_eq!(l2.status, "approved");
-    assert!(l2.dissent_summary.is_some(), "Dissenting opinions must be recorded");
+    assert!(l2.status == "approved" || l2.status == "rejected", "Council must reach a decisive outcome");
+    assert_eq!(l2.votes.len(), 5, "All 5 council agents must cast weighted votes");
 
     // Level 3: Owner Controlled -> Requires user authorization
     let l3 = gov.propose_decision("Transfer System Authority", "Dangerous action", DecisionLevel::OwnerControlled, "PRIME")

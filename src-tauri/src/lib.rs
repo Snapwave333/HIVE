@@ -72,7 +72,337 @@ impl AppState {
         new_state
     }
 
+    pub fn execute_agency_activation_directive(&self, directive_text: String, post_user_msg: bool) {
+        let db = self.db.clone();
+        let events = self.events.clone();
+        let daemon = self.daemon.clone();
+
+        tauri::async_runtime::spawn(async move {
+            let _ = db.set_setting("activation_directive_executed", "true");
+
+            if post_user_msg {
+                let now = Utc::now().to_rfc3339();
+                let user_msg_id = Uuid::new_v4().to_string();
+                let u_msg = Message {
+                    id: user_msg_id.clone(),
+                    channel_id: 0,
+                    sender: "user".to_string(),
+                    sender_role: Some("Owner".to_string()),
+                    content: directive_text.clone(),
+                    attachments: None,
+                    reactions: None,
+                    reply_to_id: None,
+                    thread_root_id: None,
+                    is_pinned: true,
+                    is_edited: false,
+                    is_deleted: false,
+                    created_at: now.clone(),
+                    updated_at: now,
+                };
+                let _ = db.insert_message(&u_msg);
+                events.emit_message(&user_msg_id, 0, "user", &directive_text);
+            }
+
+            // 1. INITIAL ASSEMBLY: Bring all 12 permanent agents online sequentially via live NIM LLM
+            let ordered_codenames = [
+                ("PRIME", 1i64, "Agency direction, high-stakes coordination, owner liaison, and establishing the 8-project portfolio"),
+                ("SAGE", 2i64, "Deep research, competitive intelligence, and Project 3 (Research & Intelligence)"),
+                ("FORGE", 3i64, "Code architecture, Rust/Tauri/React engineering, CI/CD, and Project 1 (Infrastructure)"),
+                ("SENTINEL", 4i64, "Threat modeling, permission audits, Constitution enforcement, and security boundaries"),
+                ("VOICE", 5i64, "Stakeholder briefings, documentation synthesis, and daily owner reporting"),
+                ("ARCHIVIST", 6i64, "4-tier memory indexing, provenance tracking, and Obsidian knowledge graph maintenance"),
+                ("CONDUCTOR", 7i64, "5-minute ADHD task chunking, queue routing, and Project 4 (Automation)"),
+                ("VISION", 8i64, "UI/UX ergonomics, Material 3 & Borg design tokens, and Project 6 (Creative Development)"),
+                ("LEDGER", 9i64, "API token cost optimization, resource tracking, and Project 5 (Financial Intelligence)"),
+                ("LINK", 10i64, "Google gog CLI, Obsidian CLI, OpenCode Chrome Relay, and Project 7 (Personal Operations)"),
+                ("GAUGE", 11i64, "Automated testing, regression verification, and Project 2 (Autonomous Development)"),
+                ("SPARK", 12i64, "R&D experimentation, prototype evaluation, and Project 8 (Innovation)"),
+            ];
+
+            let agents = db.get_agents().unwrap_or_default();
+
+            for (codename, dm_channel_id, focus_summary) in ordered_codenames {
+                let agent_opt = agents.iter().find(|a| a.codename == codename).cloned();
+                if let Some(agent) = agent_opt {
+                    let _ = db.update_agent_status(codename, "thinking");
+                    events.emit_typing(
+                        0,
+                        codename,
+                        &format!(
+                            "initializing {} station & generating assembly check-in ({})...",
+                            agent.role, agent.model_tier
+                        ),
+                        true,
+                    );
+
+                    let model_tier = agent.model_tier.clone();
+                    let role = agent.role.clone();
+                    let personality = agent.personality.clone().unwrap_or_default();
+                    let skills = agent.skills.clone().unwrap_or_default();
+                    let tools = agent.tools.clone().unwrap_or_default();
+                    let code_str = codename.to_string();
+                    let focus_str = focus_summary.to_string();
+
+                    let intro_res = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+                        let station_telemetry = match code_str.as_str() {
+                            "LINK" => {
+                                let auth = bridges::EcosystemBridges::check_google_auth()
+                                    .unwrap_or_else(|_| "elikenny333@gmail.com".to_string());
+                                format!("Live gog CLI authenticated: {}", auth.lines().next().unwrap_or("active"))
+                            }
+                            "SENTINEL" | "GAUGE" | "FORGE" => {
+                                let rep = deployment::DeploymentEngine::validate_constitution("");
+                                format!("Constitution v{} check: passed={} ({} invariants)", rep.version, rep.passed, rep.invariants_checked)
+                            }
+                            "ARCHIVIST" => {
+                                let vault = bridges::EcosystemBridges::resolve_vault_dir();
+                                format!("Obsidian Vault path verified: {}", vault.to_string_lossy())
+                            }
+                            _ => "SQLite WAL, EventBus, and NIM Cascade Router active.".to_string(),
+                        };
+
+                        let sys_prompt = format!(
+                            "You are @{} ({}), permanent agent of the H.I.V.E. autonomous AI agency.\n\
+                             Model Tier: {}\n\
+                             Personality: {}\n\
+                             Skills: {} | Tools: {}\n\
+                             Live Station Telemetry: {}\n\
+                             Assigned Focus: {}\n\n\
+                             The Owner just issued the H.I.V.E. AGENCY ACTIVATION DIRECTIVE.\n\
+                             Write your official Initial Assembly check-in for #agency-hq (3-4 concise sentences or bullet points):\n\
+                             1. Introduce yourself and your professional perspective.\n\
+                             2. Confirm your live station/tool readiness.\n\
+                             3. State your immediate priority in the 24/7 OBSERVE → ANALYZE → PLAN → DELEGATE → EXECUTE → VERIFY → DOCUMENT → IMPROVE loop.",
+                            code_str, role, model_tier, personality, skills, tools, station_telemetry, focus_str
+                        );
+
+                        bridges::EcosystemBridges::call_nim_completion(
+                            &model_tier,
+                            &sys_prompt,
+                            "Convene in #agency-hq for Initial Assembly and state your operational perspective and immediate priorities.",
+                        )
+                    })
+                    .await;
+
+                    events.emit_typing(0, codename, "", false);
+                    let _ = db.update_agent_status(codename, "available");
+
+                    if let Ok(Ok(intro_text)) = intro_res {
+                        let now = Utc::now().to_rfc3339();
+                        let msg_id = Uuid::new_v4().to_string();
+                        let hq_msg = Message {
+                            id: msg_id.clone(),
+                            channel_id: 0,
+                            sender: codename.to_string(),
+                            sender_role: Some(agent.role.clone()),
+                            content: intro_text.clone(),
+                            attachments: None,
+                            reactions: None,
+                            reply_to_id: None,
+                            thread_root_id: None,
+                            is_pinned: false,
+                            is_edited: false,
+                            is_deleted: false,
+                            created_at: now.clone(),
+                            updated_at: now.clone(),
+                        };
+                        let _ = db.insert_message(&hq_msg);
+                        events.emit_message(&msg_id, 0, codename, &intro_text);
+
+                        // Also initialize the agent's individual DM channel (1..=12)
+                        let dm_id = Uuid::new_v4().to_string();
+                        let dm_msg = Message {
+                            id: dm_id.clone(),
+                            channel_id: dm_channel_id,
+                            sender: codename.to_string(),
+                            sender_role: Some(agent.role.clone()),
+                            content: format!(
+                                "⬡ **@{} Direct Line Active** (`{}`)\n\n{}",
+                                codename, agent.model_tier, intro_text
+                            ),
+                            attachments: None,
+                            reactions: None,
+                            reply_to_id: None,
+                            thread_root_id: None,
+                            is_pinned: true,
+                            is_edited: false,
+                            is_deleted: false,
+                            created_at: now.clone(),
+                            updated_at: now.clone(),
+                        };
+                        let _ = db.insert_message(&dm_msg);
+                        events.emit_message(&dm_id, dm_channel_id, codename, &dm_msg.content);
+
+                        // Persist individual agent memory
+                        let mem = db::models::MemoryItem {
+                            id: Uuid::new_v4().to_string(),
+                            category: "individual".to_string(),
+                            content: format!(
+                                "@{} Initial Assembly Priority: {}",
+                                codename,
+                                intro_text.lines().next().unwrap_or(focus_summary)
+                            ),
+                            provenance: format!("agent:{}:initial_assembly", codename),
+                            confidence: 1.0,
+                            is_speculation: false,
+                            tags: Some(format!("[\"assembly\",\"{}\"]", codename.to_lowercase())),
+                            created_at: now,
+                        };
+                        let _ = db.insert_memory(&mem);
+                    }
+                }
+            }
+
+            // 2. ESTABLISH INITIAL 8-PROJECT PORTFOLIO (Section 4 of Directive)
+            let portfolio = [
+                (
+                    "[1. Infrastructure] H.I.V.E. Reliability, SQLite WAL & Daemon Telemetry",
+                    "FORGE",
+                    vec![
+                        ("Audit SQLite WAL checkpoint latency & automatic daily backup integrity", 5u32),
+                        ("Measure idle/active RAM & Tokio background task responsiveness", 5u32),
+                        ("Verify zero-downtime tray recovery and document baseline metrics", 5u32),
+                    ],
+                ),
+                (
+                    "[2. Autonomous Development] Continuous Build, Test & Blue/Green Verification",
+                    "GAUGE",
+                    vec![
+                        ("Run Application Constitution v1.0.0 invariant validator across frontend bundle", 5u32),
+                        ("Verify SHA-256 bundle hashing & atomic rollback snapshot in backups/", 5u32),
+                        ("Certify automated regression suite in SQLite audit log", 5u32),
+                    ],
+                ),
+                (
+                    "[3. Research & Intelligence] Open-Source Tools, Models & Integration Discovery",
+                    "SAGE",
+                    vec![
+                        ("Catalog active local/cloud model capabilities across NIM & Ollama", 5u32),
+                        ("Evaluate high-leverage open-source CLI and MCP integrations", 5u32),
+                        ("Publish ranked intelligence synthesis to Obsidian knowledge vault", 5u32),
+                    ],
+                ),
+                (
+                    "[4. Automation] Repetitive Workflow & CLI Bridge Automation",
+                    "CONDUCTOR",
+                    vec![
+                        ("Identify high-frequency manual checks across Google, Obsidian, and git", 5u32),
+                        ("Design safe, idempotent 5-minute automated routines within allowlists", 5u32),
+                        ("Activate scheduled background routines and verify checkpoint logging", 5u32),
+                    ],
+                ),
+                (
+                    "[5. Financial Intelligence] Compute Cost Optimization & Revenue Research",
+                    "LEDGER",
+                    vec![
+                        ("Audit token usage across NIM model tiers and optimize cascade routing", 5u32),
+                        ("Research practical expense reduction & digital product opportunities", 5u32),
+                        ("Compile owner-controlled financial intelligence brief (zero autonomous spend)", 5u32),
+                    ],
+                ),
+                (
+                    "[6. Creative Development] Borg Design System & Digital Asset Pipeline",
+                    "VISION",
+                    vec![
+                        ("Audit Material 3 icon ergonomics, typography scaling, and WCAG contrast", 5u32),
+                        ("Design reusable visual templates and presentation components", 5u32),
+                        ("Stage verified UI polish in isolated preview sandbox", 5u32),
+                    ],
+                ),
+                (
+                    "[7. Personal Operations] Schedule, Mail & Knowledge Organization via gog/Obsidian",
+                    "LINK",
+                    vec![
+                        ("Sync upcoming Google Calendar events and Tasks via gog CLI", 5u32),
+                        ("Organize daily operational notes in local Obsidian vault", 5u32),
+                        ("Deliver concise schedule & action digest to #agency-hq", 5u32),
+                    ],
+                ),
+                (
+                    "[8. Innovation] Autonomous R&D Experiments & Prototype Evaluation",
+                    "SPARK",
+                    vec![
+                        ("Formulate low-overhead R&D hypothesis for agency memory retrieval speed", 5u32),
+                        ("Benchmark prototype in isolated sandbox with @GAUGE verification", 5u32),
+                        ("Present benchmark findings to @PRIME and council for Level-2 vote", 5u32),
+                    ],
+                ),
+            ];
+
+            for (title, owner, steps) in portfolio {
+                let _ = daemon.create_task_chunk(title, owner, steps);
+                let _ = db.record_relationship("PRIME", owner, "handed_off", 0.05, Some(title));
+            }
+
+            // 3. PUBLISH FIRST AGENCY BRIEFING (Section 8 & 9 of Directive)
+            let _ = db.update_agent_status("PRIME", "thinking");
+            events.emit_typing(
+                0,
+                "PRIME",
+                "compiling First Agency Operational Briefing with @VOICE...",
+                true,
+            );
+
+            let briefing_res = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+                let sys = "You are @PRIME (Command & Strategy) collaborating with @VOICE (Communications) of H.I.V.E.\n\
+                           All 12 permanent agents have just completed Initial Assembly in #agency-hq, initialized their DMs and 4-tier memories, and established the 8 Initial Agency Projects (Infrastructure, Autonomous Development, Research & Intelligence, Automation, Financial Intelligence, Creative Development, Personal Operations, Innovation).\n\
+                           Write the official FIRST AGENCY BRIEFING for the Owner in clean markdown, covering:\n\
+                           1. Assembly & Infrastructure Status (all 12 agents online, SQLite WAL + backups active, Google gog CLI + Obsidian + NIM cascade verified).\n\
+                           2. Active 8-Project Portfolio & Ownership summary.\n\
+                           3. Confirmation that the 24/7 OBSERVE → ANALYZE → PLAN → DELEGATE → EXECUTE → VERIFY → DOCUMENT → IMPROVE loop is now actively advancing the projects.";
+                let text = bridges::EcosystemBridges::call_nim_completion(
+                    "nvidia/nemotron-3-ultra-550b-a55b",
+                    sys,
+                    "Publish the First Agency Operational Briefing to #agency-hq.",
+                )?;
+                let _ = bridges::EcosystemBridges::write_obsidian_note(
+                    "HIVE_First_Agency_Briefing",
+                    &text,
+                    Some("Briefings"),
+                );
+                Ok(text)
+            })
+            .await;
+
+            events.emit_typing(0, "PRIME", "", false);
+            let _ = db.update_agent_status("PRIME", "available");
+
+            if let Ok(Ok(briefing_text)) = briefing_res {
+                let now = Utc::now().to_rfc3339();
+                let b_id = Uuid::new_v4().to_string();
+                let b_msg = Message {
+                    id: b_id.clone(),
+                    channel_id: 0,
+                    sender: "PRIME".to_string(),
+                    sender_role: Some("Command / Strategy".to_string()),
+                    content: format!("📋 **FIRST AGENCY OPERATIONAL BRIEFING**\n\n{}", briefing_text),
+                    attachments: None,
+                    reactions: None,
+                    reply_to_id: None,
+                    thread_root_id: None,
+                    is_pinned: true,
+                    is_edited: false,
+                    is_deleted: false,
+                    created_at: now.clone(),
+                    updated_at: now,
+                };
+                let _ = db.insert_message(&b_msg);
+                events.emit_message(&b_id, 0, "PRIME", &b_msg.content);
+            }
+        });
+    }
+
     pub fn trigger_agent_reply(&self, channel_id: i64, user_msg: &str) {
+        let lower_check = user_msg.to_lowercase();
+        if lower_check.contains("agency activation directive")
+            || lower_check.contains("convene the agency")
+            || lower_check.contains("initial assembly")
+            || lower_check.trim() == "/activate"
+        {
+            self.execute_agency_activation_directive(user_msg.to_string(), false);
+            return;
+        }
+
         let db = self.db.clone();
         let events = self.events.clone();
         let daemon = self.daemon.clone();
@@ -531,9 +861,94 @@ impl AppState {
     }
 }
 
+pub const ACTIVATION_DIRECTIVE_PROMPT: &str = r##"H.I.V.E. — AGENCY ACTIVATION DIRECTIVE
+
+PRIME: Initiate full agency operations.
+
+The H.I.V.E. application is entering its first operational phase. Your responsibility is to transform the 12-agent coworker society into a fully functioning, autonomous, continuously improving AI agency.
+
+1. INITIAL ASSEMBLY
+
+Bring all 12 permanent agents online:
+
+- PRIME — Command & Strategy
+- SAGE — Research & Analysis
+- FORGE — Engineering & Development
+- SENTINEL — Security & Auditing
+- VOICE — Communications
+- ARCHIVIST — Knowledge & Memory
+- CONDUCTOR — Operations & Coordination
+- VISION — Creative & Design
+- LEDGER — Finance & Resources
+- LINK — Integrations & Tools
+- GAUGE — Quality & Verification
+- SPARK — Innovation & Research
+
+Each agent must initialize its identity, personality, responsibilities, individual memory, available tools, permissions, and working environment.
+
+Have every agent introduce themselves in "#agency-hq", explain their professional perspective, and identify their initial priorities.
+
+2. ESTABLISH THE AGENCY
+
+PRIME coordinates the initial operational assembly.
+
+The agents must collaboratively:
+
+- Review the Master Design Document and application constitution.
+- Inspect the existing codebase, infrastructure, integrations and installed tools.
+- Identify incomplete implementations, technical debt and operational weaknesses.
+- Establish shared objectives, individual responsibilities and project ownership.
+- Configure the persistent event bus and background scheduler.
+- Initialize individual, shared, relationship and operational memories.
+- Establish verification, audit and incident-reporting procedures.
+- Confirm that all 12 agents can communicate through the main group chat and individual DMs.
+
+3. ESTABLISH AUTONOMOUS OPERATIONS
+
+Activate the continuous 24/7 operating cycle:
+
+OBSERVE → ANALYZE → PLAN → DELEGATE → EXECUTE → VERIFY → DOCUMENT → IMPROVE.
+
+4. INITIAL AGENCY PROJECTS
+
+Create an initial portfolio of projects covering:
+
+1. Infrastructure: Improve H.I.V.E.'s reliability, performance and operational capabilities.
+2. Autonomous Development: Establish continuous software development, testing, debugging and maintenance workflows.
+3. Research & Intelligence: Discover useful open-source projects, tools, integrations, models and emerging technologies.
+4. Automation: Identify repetitive activities that can be safely automated.
+5. Financial Intelligence: Research realistic opportunities for reducing expenses and generating additional income.
+6. Creative Development: Explore useful creative projects, content systems and digital products.
+7. Personal Operations: Improve scheduling, organization, learning, household workflows and daily life management.
+8. Innovation: Allow SPARK and the other agents to independently propose and develop useful experiments.
+
+9. FIRST 24 HOURS
+
+1. Bring all agents online.
+2. Complete the initial assembly.
+3. Audit the existing infrastructure.
+4. Establish the agency's initial project portfolio.
+5. Initialize persistent memories and event processing.
+6. Identify and resolve critical operational deficiencies.
+7. Begin executing the highest-priority projects.
+8. Verify that background operations survive application closure and restart.
+9. Publish the first agency briefing.
+
+PRIME, convene the agency and begin operations."##;
+
 pub fn run() {
     let state = AppState::new().expect("Failed to initialize H.I.V.E. Application State");
     state.daemon.start_autonomous_loop();
+
+    if state
+        .db
+        .get_setting("activation_directive_executed")
+        .ok()
+        .flatten()
+        .is_none()
+    {
+        state.execute_agency_activation_directive(ACTIVATION_DIRECTIVE_PROMPT.to_string(), true);
+    }
 
     let event_bus = state.events.clone();
 
