@@ -205,17 +205,28 @@ pub fn get_tasks(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn create_task(
+pub async fn create_task(
     title: String,
-    assignee: String,
+    assignee: Option<String>,
     steps: Vec<String>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let steps_tuple: Vec<(&str, u32)> = steps.iter().map(|s| (s.as_str(), 5)).collect();
-    state
-        .daemon
-        .create_task_chunk(&title, &assignee, steps_tuple)
-        .map_err(|e| e.to_string())
+    let app_state = state.inner().clone();
+    let plan = app_state
+        .queue_task(&title, assignee, steps)
+        .await
+        .map_err(|e| e.to_string())?;
+    let message = AppState::queued_message(&plan);
+    crate::agents::post_message(
+        &app_state.db,
+        &app_state.events,
+        0,
+        "CONDUCTOR",
+        crate::agents::role_for("CONDUCTOR"),
+        &message,
+        false,
+    );
+    Ok(plan.title)
 }
 
 #[tauri::command(rename_all = "snake_case")]

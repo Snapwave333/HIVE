@@ -31,7 +31,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
         </div>
 
         <div className="flex items-center space-x-1.5 flex-shrink-0">
-          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-mono bg-hive-lime/10 text-hive-lime border border-hive-lime/30">
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono border ${
+              task.status === "failed"
+                ? "bg-red-500/10 text-red-400 border-red-500/30"
+                : task.status === "completed"
+                ? "bg-hive-surface text-hive-dimText border-hive-border"
+                : "bg-hive-lime/10 text-hive-lime border-hive-lime/30"
+            }`}
+          >
             {task.status.toUpperCase()}
           </span>
           <span className="text-[10px] text-hive-dimText font-mono">{progressPercent}%</span>

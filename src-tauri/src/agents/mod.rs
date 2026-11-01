@@ -299,6 +299,7 @@ pub fn parse_step_lines(text: &str, max: usize) -> Vec<String> {
         .collect()
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct TaskPlan {
     pub title: String,
     pub assignee: String,

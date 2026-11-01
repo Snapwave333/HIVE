@@ -419,3 +419,52 @@ fn only_safe_external_links_can_be_opened() {
         assert!(agents::safe_external_url(bad).is_none(), "should refuse {:?}", bad);
     }
 }
+
+fn test_state() -> hive_lib::AppState {
+    let db = Database::new_in_memory().unwrap();
+    let events = hive_lib::events::EventBus::new(64);
+    hive_lib::AppState {
+        db: db.clone(),
+        events: events.clone(),
+        daemon: hive_lib::daemon::DaemonManager::new(db.clone(), events.clone()),
+        governance: hive_lib::governance::GovernanceEngine::new(db.clone(), events.clone()),
+        deployment: hive_lib::deployment::DeploymentEngine::with_root(
+            db,
+            events,
+            std::env::temp_dir().join(format!("hive-state-{}", Uuid::new_v4())),
+        ),
+        audio_muted: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+    }
+}
+
+#[test]
+fn queued_tasks_use_the_owners_steps_or_a_real_planner() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let state = test_state();
+
+    let plan = rt
+        .block_on(state.queue_task(
+            "Clean up attachments",
+            Some("@archivist".to_string()),
+            vec!["List orphaned files".into(), "  ".into(), "Delete the orphans".into()],
+        ))
+        .unwrap();
+    assert_eq!(plan.assignee, "ARCHIVIST");
+    assert_eq!(plan.steps, vec!["List orphaned files", "Delete the orphans"], "blank lines are dropped");
+    let tasks = state.db.get_tasks(Some("active")).unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].steps.len(), 2);
+    assert!(tasks.iter().all(|t| !t.steps.iter().any(|s| s.title.contains("Scope and inspect"))));
+
+    assert!(rt.block_on(state.queue_task("  ", None, vec!["x".into()])).is_err());
+    assert!(rt.block_on(state.queue_task("x", Some("NOBODY".into()), vec!["x".into()])).is_err());
+
+    if !EcosystemBridges::llm_configured() {
+        let err = rt.block_on(state.queue_task("Plan a launch", None, vec![])).unwrap_err().to_string();
+        assert!(err.contains("NVIDIA_API_KEY"), "without steps it needs the real planner, got: {}", err);
+        assert_eq!(state.db.get_tasks(Some("active")).unwrap().len(), 1, "nothing canned gets queued");
+    }
+
+    let msg = hive_lib::AppState::queued_message(&plan);
+    assert!(msg.contains("1. List orphaned files (~5m)") && msg.contains("@ARCHIVIST"));
+}

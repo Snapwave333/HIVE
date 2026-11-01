@@ -11,7 +11,7 @@ interface ConversationListProps {
   onSelectChannel: (channelId: number) => void;
   onOpenSearch: () => void;
   onTaskStepToggle: (taskId: string, stepIndex: number, completed: boolean) => void;
-  onCreateTask: (title: string, assignee: string, steps: string[]) => void;
+  onCreateTask: (title: string, assignee: string | undefined, steps: string[]) => Promise<void>;
   latestMessages: Record<number, Message>;
   unreadCounts: Record<number, number>;
 }
@@ -32,7 +32,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const [query, setQuery] = useState("");
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskAssignee, setNewTaskAssignee] = useState("FORGE");
+  const [newTaskAssignee, setNewTaskAssignee] = useState("");
+  const [newTaskSteps, setNewTaskSteps] = useState("");
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
 
   const hqChannel = channels.find((c) => c.id === 0);
   const dmChannels = channels.filter((c) => c.id !== 0);
@@ -50,15 +53,24 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     return matchName || matchDesc || matchRole;
   });
 
-  const handleAddTask = () => {
-    if (!newTaskTitle.trim()) return;
-    onCreateTask(newTaskTitle.trim(), newTaskAssignee, [
-      `Step 1 (5m): Scope and inspect "${newTaskTitle.trim()}"`,
-      `Step 2 (5m): Execute primary action & verify`,
-      `Step 3 (5m): Record checkpoint and notify #agency-hq`,
-    ]);
-    setNewTaskTitle("");
-    setShowNewTaskForm(false);
+  const handleAddTask = async () => {
+    if (!newTaskTitle.trim() || creatingTask) return;
+    setCreatingTask(true);
+    setTaskError(null);
+    try {
+      const steps = newTaskSteps
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await onCreateTask(newTaskTitle.trim(), newTaskAssignee || undefined, steps);
+      setNewTaskTitle("");
+      setNewTaskSteps("");
+      setShowNewTaskForm(false);
+    } catch (e) {
+      setTaskError(String(e));
+    } finally {
+      setCreatingTask(false);
+    }
   };
 
   return (
@@ -70,7 +82,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <M3Icon name="hexagon" filled size={16} className="text-hive-lime" /> H.I.V.E. Channels
           </h2>
           <span className="text-[11px] text-hive-dimText font-mono bg-hive-surface px-2 py-0.5 rounded-md border border-hive-border">
-            13 lines
+            {channels.length} lines
           </span>
         </div>
 
@@ -137,17 +149,26 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <div className="p-3 rounded-xl bg-hive-surface border border-hive-lime/40 space-y-2.5 text-xs">
               <input
                 type="text"
-                placeholder="Task title (chunked into 5m steps)..."
+                placeholder="What needs doing?"
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 className="w-full bg-hive-base border border-hive-border rounded-lg px-2.5 py-1.5 text-hive-brightText outline-none focus:border-hive-lime/50"
               />
+              <textarea
+                rows={3}
+                placeholder={"Steps, one per line (optional).\nLeave blank and @CONDUCTOR breaks it into ~5-minute steps."}
+                value={newTaskSteps}
+                onChange={(e) => setNewTaskSteps(e.target.value)}
+                className="w-full bg-hive-base border border-hive-border rounded-lg px-2.5 py-1.5 text-hive-brightText outline-none focus:border-hive-lime/50 resize-none"
+              />
+              {taskError && <div className="text-red-400 text-[11px]">{taskError}</div>}
               <div className="flex items-center justify-between gap-2">
                 <select
                   value={newTaskAssignee}
                   onChange={(e) => setNewTaskAssignee(e.target.value)}
                   className="bg-hive-base border border-hive-border rounded-lg px-2.5 py-1.5 text-hive-lime text-[11px] font-mono outline-none"
                 >
+                  <option value="">{newTaskSteps.trim() ? "@FORGE (default)" : "Let @CONDUCTOR pick"}</option>
                   {agents.map((a) => (
                     <option key={a.codename} value={a.codename}>
                       @{a.codename}
@@ -156,9 +177,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 </select>
                 <button
                   onClick={handleAddTask}
-                  className="px-3 py-1.5 rounded-lg bg-hive-lime text-hive-base font-semibold text-[11px] hover:opacity-90 transition-opacity"
+                  disabled={!newTaskTitle.trim() || creatingTask}
+                  className="px-3 py-1.5 rounded-lg bg-hive-lime text-hive-base font-semibold text-[11px] hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
-                  Create Task
+                  {creatingTask ? (newTaskSteps.trim() ? "Saving…" : "Planning…") : "Create Task"}
                 </button>
               </div>
             </div>

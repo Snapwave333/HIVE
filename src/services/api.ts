@@ -52,7 +52,7 @@ export const api = {
   getUnreadCounts: () => tauriInvoke<Record<string, number>>("get_unread_counts"),
   getTasks: (statusFilter?: string) =>
     tauriInvoke<TaskChunk[]>("get_tasks", { status_filter: statusFilter }),
-  createTask: (title: string, assignee: string, steps: string[]) =>
+  createTask: (title: string, assignee: string | undefined, steps: string[]) =>
     tauriInvoke<string>("create_task", { title, assignee, steps }),
   updateTaskStep: (taskId: string, stepIndex: number, completed: boolean, checkpoint?: string) =>
     tauriInvoke<void>("update_task_step", {

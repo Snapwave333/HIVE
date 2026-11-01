@@ -378,6 +378,94 @@ impl AppState {
         });
     }
 
+    pub fn queued_message(plan: &agents::TaskPlan) -> String {
+        let steps = plan
+            .steps
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("{}. {} (~5m)", i + 1, s))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            "Got it, queued **{}**:\n\n{}\n\n@{} has it. Progress shows up here as each step lands.",
+            plan.title, steps, plan.assignee
+        )
+    }
+
+    pub async fn queue_task(
+        &self,
+        goal: &str,
+        assignee: Option<String>,
+        manual_steps: Vec<String>,
+    ) -> anyhow::Result<agents::TaskPlan> {
+        let goal = goal.trim().to_string();
+        if goal.is_empty() {
+            anyhow::bail!("give the task a title or goal");
+        }
+        let assignee = assignee
+            .map(|a| a.trim().trim_start_matches('@').to_uppercase())
+            .filter(|a| !a.is_empty());
+        if let Some(a) = assignee.as_deref() {
+            if !agents::ROSTER.contains(&a) {
+                anyhow::bail!("{} isn't one of the 12 agents", a);
+            }
+        }
+        let steps: Vec<String> = manual_steps
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .take(8)
+            .collect();
+
+        let plan = if !steps.is_empty() {
+            agents::TaskPlan {
+                title: goal,
+                assignee: assignee.unwrap_or_else(|| "FORGE".to_string()),
+                steps,
+            }
+        } else {
+            let conductor = self.db.get_agent("CONDUCTOR").ok().flatten();
+            let goal_for_model = goal.clone();
+            let planned = tokio::task::spawn_blocking(move || -> anyhow::Result<agents::TaskPlan> {
+                let tier = conductor
+                    .as_ref()
+                    .map(|a| a.model_tier.clone())
+                    .unwrap_or_else(|| "minimaxai/minimax-m3.1-flash".to_string());
+                let sys = "You are @CONDUCTOR, who runs the H.I.V.E. task queue. Break the Owner's goal into exactly 3 concrete steps of about 5 minutes each and pick who should own it.\n\
+                           Reply in exactly this format and nothing else:\n\
+                           TITLE: <short task title>\n\
+                           ASSIGNEE: <one of PRIME, SAGE, FORGE, SENTINEL, VOICE, ARCHIVIST, CONDUCTOR, VISION, LEDGER, LINK, GAUGE, SPARK>\n\
+                           STEP1: <step>\nSTEP2: <step>\nSTEP3: <step>";
+                let out = EcosystemBridges::call_nim_completion(&tier, sys, &goal_for_model)?;
+                if let Some(p) = agents::parse_task_plan(&out, "FORGE") {
+                    return Ok(p);
+                }
+                let steps = agents::parse_step_lines(&out, 3);
+                if steps.is_empty() {
+                    anyhow::bail!("the model didn't return any usable steps");
+                }
+                Ok(agents::TaskPlan {
+                    title: goal_for_model,
+                    assignee: "FORGE".to_string(),
+                    steps,
+                })
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("task planning crashed: {}", e))??;
+            agents::TaskPlan {
+                assignee: assignee.unwrap_or(planned.assignee),
+                ..planned
+            }
+        };
+
+        let refs: Vec<(&str, u32)> = plan.steps.iter().map(|s| (s.as_str(), 5u32)).collect();
+        self.daemon.create_task_chunk(&plan.title, &plan.assignee, refs)?;
+        let _ = self
+            .db
+            .record_relationship("CONDUCTOR", &plan.assignee, "handed_off", 0.04, Some(&plan.title));
+        Ok(plan)
+    }
+
     async fn run_slash_command(&self, channel_id: i64, user_msg: &str) -> Option<(String, String, String)> {
         let lower = user_msg.to_lowercase();
         if !lower.starts_with('/') {
@@ -418,43 +506,10 @@ impl AppState {
                 Err(e) => say("ARCHIVIST", format!("⚠ Backup failed: {}", e)),
             },
             "/task" if arg.is_empty() => say("CONDUCTOR", "Give me a goal, like `/task clean up the attachments folder`.".to_string()),
-            "/task" => {
-                let conductor = self.db.get_agent("CONDUCTOR").ok().flatten();
-                let goal = arg.clone();
-                let plan = tokio::task::spawn_blocking(move || -> anyhow::Result<agents::TaskPlan> {
-                    let tier = conductor.as_ref().map(|a| a.model_tier.clone()).unwrap_or_else(|| "minimaxai/minimax-m3.1-flash".to_string());
-                    let sys = "You are @CONDUCTOR, who runs the H.I.V.E. task queue. Break the Owner's goal into exactly 3 concrete steps of about 5 minutes each and pick who should own it.\n\
-                               Reply in exactly this format and nothing else:\n\
-                               TITLE: <short task title>\n\
-                               ASSIGNEE: <one of PRIME, SAGE, FORGE, SENTINEL, VOICE, ARCHIVIST, CONDUCTOR, VISION, LEDGER, LINK, GAUGE, SPARK>\n\
-                               STEP1: <step>\nSTEP2: <step>\nSTEP3: <step>";
-                    let out = EcosystemBridges::call_nim_completion(&tier, sys, &goal)?;
-                    if let Some(p) = agents::parse_task_plan(&out, "FORGE") {
-                        return Ok(p);
-                    }
-                    let steps = agents::parse_step_lines(&out, 3);
-                    if steps.is_empty() {
-                        anyhow::bail!("the model didn't return any usable steps");
-                    }
-                    Ok(agents::TaskPlan { title: goal, assignee: "FORGE".to_string(), steps })
-                })
-                .await;
-                match plan {
-                    Ok(Ok(plan)) => {
-                        let refs: Vec<(&str, u32)> = plan.steps.iter().map(|s| (s.as_str(), 5u32)).collect();
-                        match self.daemon.create_task_chunk(&plan.title, &plan.assignee, refs) {
-                            Ok(_) => {
-                                let _ = self.db.record_relationship("CONDUCTOR", &plan.assignee, "handed_off", 0.04, Some(&plan.title));
-                                let steps = plan.steps.iter().enumerate().map(|(i, s)| format!("{}. {} (~5m)", i + 1, s)).collect::<Vec<_>>().join("\n");
-                                say("CONDUCTOR", format!("Got it, queued **{}**:\n\n{}\n\n@{} has it. Progress shows up here as each step lands.", plan.title, steps, plan.assignee))
-                            }
-                            Err(e) => say("CONDUCTOR", format!("⚠ Couldn't save that task: {}", e)),
-                        }
-                    }
-                    Ok(Err(e)) => say("CONDUCTOR", format!("⚠ Couldn't break that down: {}", e)),
-                    Err(e) => say("CONDUCTOR", format!("⚠ Task planning crashed: {}", e)),
-                }
-            }
+            "/task" => match self.queue_task(&arg, None, Vec::new()).await {
+                Ok(plan) => say("CONDUCTOR", Self::queued_message(&plan)),
+                Err(e) => say("CONDUCTOR", format!("⚠ Couldn't queue that: {}", e)),
+            },
             "/spawn_temp" if arg.is_empty() => say("PRIME", "Name it, like `/spawn_temp rust_profiler`.".to_string()),
             "/spawn_temp" => match self.db.spawn_temp_specialist(&arg, "Ephemeral Task Specialist", "PRIME", 30) {
                 Ok(spec) => {

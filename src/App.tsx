@@ -414,7 +414,7 @@ export const App: React.FC = () => {
     setTasks(updated);
   };
 
-  const handleCreateTask = async (title: string, assignee: string, steps: string[]) => {
+  const handleCreateTask = async (title: string, assignee: string | undefined, steps: string[]) => {
     await api.createTask(title, assignee, steps);
     const updated = await api.getTasks();
     setTasks(updated);
