@@ -48,6 +48,28 @@ namespace HIVE.Editor
             Debug.Log("[HiveSceneBuilder] All 7 operational scenes, prefabs, and Build Settings successfully generated!");
         }
 
+        [MenuItem("HIVE/Build Standalone Windows Player")]
+        public static void BuildStandalonePlayer()
+        {
+            var buildPath = "Builds/HIVE.exe";
+            var dir = Path.GetDirectoryName(buildPath);
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            var scenes = EditorBuildSettings.scenes.Select(s => s.path).ToArray();
+            Debug.Log($"[HiveSceneBuilder] Building player with {scenes.Length} scenes to {buildPath}...");
+            var report = BuildPipeline.BuildPlayer(scenes, buildPath, BuildTarget.StandaloneWindows64, BuildOptions.None);
+            if (report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded)
+            {
+                Debug.Log($"[HiveSceneBuilder] Player built successfully at {buildPath} ({report.summary.totalSize / (1024 * 1024)} MB)");
+                EditorApplication.Exit(0);
+            }
+            else
+            {
+                Debug.LogError($"[HiveSceneBuilder] Player build failed: {report.summary.result} ({report.summary.totalErrors} errors)");
+                EditorApplication.Exit(1);
+            }
+        }
+
         private static void EnsureDirectories()
         {
             if (!Directory.Exists(SCENES_DIR)) Directory.CreateDirectory(SCENES_DIR);

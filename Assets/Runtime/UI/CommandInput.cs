@@ -469,12 +469,16 @@ namespace HIVE.UI
         private void AttachFile()
         {
             // Open file dialog
+#if UNITY_EDITOR
             var path = UnityEditor.EditorUtility.OpenFilePanel("Attach File", "", "txt,log,json,cs,py,md,png,jpg,pdf");
             if (!string.IsNullOrEmpty(path))
             {
                 _attachments.Add(new AttachmentItem { Path = path, Name = System.IO.Path.GetFileName(path) });
                 UpdateAttachmentsUI();
             }
+#else
+            Debug.Log("[CommandInput] File attachment in standalone player.");
+#endif
         }
 
         private void UpdateAttachmentsUI()

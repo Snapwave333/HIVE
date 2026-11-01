@@ -168,7 +168,7 @@ function Invoke-Build {
     }
     $targetExe = Join-Path $buildsDir "HIVE.exe"
     $logFile = Join-Path $ProjectRoot "build_player.log"
-    $unityArgs = "-batchmode -quit -projectPath `"$ProjectRoot`" -buildWindows64Player `"$targetExe`" -logFile `"$logFile`""
+    $unityArgs = "-batchmode -quit -projectPath `"$ProjectRoot`" -executeMethod HIVE.Editor.HiveSceneBuilder.BuildStandalonePlayer -logFile `"$logFile`""
 
     Write-Host "  Target:  $targetExe" -ForegroundColor Gray
     Write-Host "  Compiling operational scenes, assets, and cybernetic runtime..." -ForegroundColor DarkCyan
@@ -273,7 +273,8 @@ function Invoke-Launch {
     # 3. Launch
     if (Test-Path $targetExe) {
         Write-Host "  [3/3] Launching standalone H.I.V.E. application..." -ForegroundColor Green
-        $proc = Start-Process -FilePath $targetExe -PassThru
+        $buildsDir = Split-Path -Parent $targetExe
+        $proc = Start-Process -FilePath $targetExe -WorkingDirectory $buildsDir -PassThru
         Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. active! PID: $($proc.Id)" -ForegroundColor Green
         Write-Host "Binary: $targetExe" -ForegroundColor Cyan
         Write-Host "12 Autonomous Agents: Standby / Operational" -ForegroundColor DarkCyan
