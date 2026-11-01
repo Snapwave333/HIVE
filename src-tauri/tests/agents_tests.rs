@@ -574,3 +574,23 @@ fn channel_previews_return_the_latest_live_message_per_channel() {
     assert_eq!(ch3[0].content, "newer");
     assert!(previews.iter().any(|m| m.channel_id == 0), "the welcome message previews #agency-hq");
 }
+
+#[test]
+fn agents_are_told_what_the_owner_replied_to() {
+    let forge = msg("FORGE", "Want me to bump the WAL checkpoint to 1000 pages?");
+    let note = agents::reply_context(Some(&forge), "SAGE").unwrap();
+    assert!(note.contains("@FORGE's message") && note.contains("WAL checkpoint"));
+    assert!(agents::reply_context(Some(&forge), "FORGE").unwrap().contains("something you said"));
+    let mut gone = msg("FORGE", "x");
+    gone.is_deleted = true;
+    assert!(agents::reply_context(Some(&gone), "FORGE").is_none());
+    assert!(agents::reply_context(None, "FORGE").is_none());
+}
+
+#[test]
+fn replies_route_to_the_agent_you_replied_to_unless_you_tag_someone() {
+    assert_eq!(agents::choose_responders(&[], None), vec!["PRIME"]);
+    assert_eq!(agents::choose_responders(&[], Some("FORGE")), vec!["FORGE"]);
+    assert_eq!(agents::choose_responders(&["SAGE"], Some("FORGE")), vec!["SAGE"], "an explicit tag wins");
+    assert_eq!(agents::choose_responders(&["SAGE", "FORGE", "LINK", "GAUGE"], None).len(), 3);
+}

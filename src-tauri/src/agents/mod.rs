@@ -499,6 +499,35 @@ pub fn export_markdown(channel_label: &str, messages: &[Message]) -> String {
     out
 }
 
+pub fn choose_responders(mentioned: &[&'static str], replied_agent: Option<&'static str>) -> Vec<&'static str> {
+    if !mentioned.is_empty() {
+        mentioned.iter().copied().take(MAX_RESPONDERS_PER_MESSAGE).collect()
+    } else if let Some(agent) = replied_agent {
+        vec![agent]
+    } else {
+        vec!["PRIME"]
+    }
+}
+
+pub fn reply_context(replied_to: Option<&Message>, codename: &str) -> Option<String> {
+    let m = replied_to?;
+    if m.is_deleted {
+        return None;
+    }
+    let who = if m.sender == "user" {
+        "their own earlier message".to_string()
+    } else if m.sender == codename {
+        "something you said".to_string()
+    } else {
+        format!("@{}'s message", m.sender)
+    };
+    Some(format!(
+        "(The Owner's latest message is a reply to {}: \"{}\")",
+        who,
+        truncate_chars(m.content.trim(), 400)
+    ))
+}
+
 pub fn post_message(
     db: &Database,
     events: &EventBus,
@@ -654,11 +683,17 @@ pub fn live_context(db: &Database, codename: &str, hint: &str) -> String {
 pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, owner_msg: String) {
     let responders: Vec<Agent> = if channel_id == 0 {
         let mentioned = find_mentions(&owner_msg);
-        let codes: Vec<&str> = if mentioned.is_empty() {
-            vec!["PRIME"]
-        } else {
-            mentioned.into_iter().take(MAX_RESPONDERS_PER_MESSAGE).collect()
-        };
+        let replied_agent = db
+            .get_messages(0, 4, None)
+            .unwrap_or_default()
+            .into_iter()
+            .rev()
+            .find(|m| m.sender == "user")
+            .and_then(|m| m.reply_to_id)
+            .and_then(|id| db.get_message_by_id(&id).ok().flatten())
+            .map(|m| m.sender)
+            .and_then(|s| ROSTER.iter().copied().find(|c| *c == s));
+        let codes = choose_responders(&mentioned, replied_agent);
         codes
             .into_iter()
             .filter_map(|c| db.get_agent(c).ok().flatten())
@@ -715,6 +750,13 @@ pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, o
                 .find(|m| m.sender == "user")
                 .map(|m| describe_attachments(&db_work, m.attachments.as_deref(), true))
                 .filter(|d| d.contains("```"));
+            let replied_to = raw_history
+                .iter()
+                .rev()
+                .find(|m| m.sender == "user")
+                .and_then(|m| m.reply_to_id.clone())
+                .and_then(|id| db_work.get_message_by_id(&id).ok().flatten());
+            let reply_note = reply_context(replied_to.as_ref(), &agent_work.codename);
             let history = with_attachment_notes(&db_work, &raw_history);
             let memories = memory_lines(&db_work, &agent_work.codename, 5);
             let live = live_context(&db_work, &agent_work.codename, &msg_work);
@@ -745,6 +787,9 @@ pub async fn respond_to_owner(db: Database, events: EventBus, channel_id: i64, o
             let mut turns = transcript_turns(&agent_work.codename, &history, 700);
             if turns.last().map(|t| t.role != "user").unwrap_or(true) {
                 push_user_turn(&mut turns, &format!("Owner: {}", msg_work));
+            }
+            if let Some(note) = reply_note {
+                push_user_turn(&mut turns, &note);
             }
             if let Some(files) = latest_files {
                 push_user_turn(&mut turns, &format!("(Contents of the files the Owner just attached:)\n{}", files));
