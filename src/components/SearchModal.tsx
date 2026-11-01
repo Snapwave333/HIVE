@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
-import { Search, MessageSquare, CheckSquare, Brain, ArrowRight } from "lucide-react";
+import { M3Icon } from "./M3Icon";
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -62,7 +62,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
       <div className="bg-hive-panel border border-hive-border rounded-xl w-full max-w-xl shadow-2xl overflow-hidden font-segoe flex flex-col max-h-[75vh]">
         {/* Search Bar Input */}
         <div className="p-3 border-b border-hive-border flex items-center space-x-2.5 bg-hive-surface">
-          <Search className="w-4 h-4 text-hive-cyan flex-shrink-0" />
+          <M3Icon name="search" size={18} className="text-hive-cyan flex-shrink-0" />
           <input
             autoFocus
             type="text"
@@ -80,7 +80,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
         <div className="p-3 overflow-y-auto space-y-4 text-xs">
           {loading && (
             <div className="py-8 text-center text-hive-dimText text-xs font-mono">
-              Indexing memory vectors...
+              Searching SQLite index...
             </div>
           )}
 
@@ -96,7 +96,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
               {results.messages?.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-hive-dimText flex items-center gap-1">
-                    <MessageSquare className="w-3 h-3 text-hive-cyan" /> Messages
+                    <M3Icon name="forum" size={14} className="text-hive-cyan" /> Messages
                   </span>
                   <div className="space-y-1">
                     {results.messages.map((m) => (
@@ -117,7 +117,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                           </div>
                           <p className="text-xs text-hive-brightText truncate mt-0.5">{m.snippet}</p>
                         </div>
-                        <ArrowRight className="w-3.5 h-3.5 text-hive-dimText flex-shrink-0 ml-2" />
+                        <M3Icon name="arrow_forward" size={15} className="text-hive-dimText flex-shrink-0 ml-2" />
                       </div>
                     ))}
                   </div>
@@ -128,7 +128,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
               {results.tasks?.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-hive-dimText flex items-center gap-1">
-                    <CheckSquare className="w-3 h-3 text-hive-lime" /> Action Tasks
+                    <M3Icon name="checklist" size={14} className="text-hive-lime" /> Action Tasks
                   </span>
                   <div className="space-y-1">
                     {results.tasks.map((t) => (
@@ -153,7 +153,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
               {results.memories?.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-hive-dimText flex items-center gap-1">
-                    <Brain className="w-3 h-3 text-purple-400" /> Agency Memories
+                    <M3Icon name="psychology" size={14} className="text-purple-400" /> Agency Memories
                   </span>
                   <div className="space-y-1">
                     {results.memories.map((mem) => (

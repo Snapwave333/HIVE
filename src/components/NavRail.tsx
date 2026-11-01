@@ -1,5 +1,5 @@
 import React from "react";
-import { MessageSquare, Settings, VolumeX, Volume2 } from "lucide-react";
+import { M3Icon } from "./M3Icon";
 
 interface NavRailProps {
   currentTab: "chats" | "settings";
@@ -22,10 +22,10 @@ export const NavRail: React.FC<NavRailProps> = ({
       <div className="flex flex-col items-center space-y-4">
         {/* Borg Hexagon Logo */}
         <div
-          className="w-8 h-8 rounded bg-hive-surface border border-hive-cyan/30 flex items-center justify-center text-hive-cyan font-bold text-xs shadow-inner cursor-pointer"
+          className="w-8 h-8 rounded bg-hive-surface border border-hive-cyan/30 flex items-center justify-center text-hive-cyan shadow-inner cursor-pointer"
           title="H.I.V.E. Autonomous Agency"
         >
-          ⬡
+          <M3Icon name="hexagon" filled size={18} />
         </div>
 
         {/* Chats Tab */}
@@ -39,7 +39,7 @@ export const NavRail: React.FC<NavRailProps> = ({
           title="Chats & Direct Lines"
           aria-label="Chats"
         >
-          <MessageSquare className="w-4 h-4" />
+          <M3Icon name="forum" filled={currentTab === "chats"} size={19} />
           <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-hive-lime" />
         </button>
 
@@ -54,7 +54,7 @@ export const NavRail: React.FC<NavRailProps> = ({
           title="Agency Settings & Constitution"
           aria-label="Settings"
         >
-          <Settings className="w-4 h-4" />
+          <M3Icon name="tune" filled={currentTab === "settings"} size={19} />
         </button>
       </div>
 
@@ -71,7 +71,7 @@ export const NavRail: React.FC<NavRailProps> = ({
           title={isMuted ? "Audio Strictly Muted (Default)" : "Audio Speech Enabled"}
           aria-label="Audio Mute"
         >
-          {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          <M3Icon name={isMuted ? "volume_off" : "volume_up"} filled={!isMuted} size={17} />
         </button>
 
         {/* 24/7 Agency Operational State Dot */}

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Channel, Agent, Message, TaskChunk } from "../types";
-import { Search, Pin, CheckSquare, Plus } from "lucide-react";
 import { TaskCard } from "./TaskCard";
+import { M3Icon } from "./M3Icon";
 
 interface ConversationListProps {
   channels: Channel[];
@@ -65,7 +65,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       <div className="p-3 border-b border-hive-border flex flex-col space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-wide text-hive-brightText uppercase flex items-center gap-1.5">
-            <span className="text-hive-cyan">⬡</span> Chats
+            <M3Icon name="hexagon" filled size={15} className="text-hive-cyan" /> Chats
           </h2>
           <span className="text-xs text-hive-dimText font-mono">13 channels</span>
         </div>
@@ -75,7 +75,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           onClick={onOpenSearch}
           className="flex items-center px-2.5 py-1.5 rounded bg-hive-surface border border-hive-border hover:border-hive-cyan/50 text-hive-dimText cursor-pointer transition-colors text-xs space-x-2"
         >
-          <Search className="w-3.5 h-3.5 text-hive-cyan" />
+          <M3Icon name="search" size={15} className="text-hive-cyan" />
           <input
             type="text"
             placeholder="Search messages & memories (Ctrl+K)..."
@@ -93,13 +93,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         <div className="flex space-x-1.5 pt-1">
           <button
             onClick={() => setFilter("all")}
-            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${
+            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${
               filter === "all"
                 ? "bg-hive-surface text-hive-cyan border border-hive-cyan/30"
                 : "text-hive-dimText hover:text-hive-brightText"
             }`}
           >
-            All Lines
+            <M3Icon name="chat" size={13} /> All Lines
           </button>
           <button
             onClick={() => setFilter("tasks")}
@@ -109,7 +109,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 : "text-hive-dimText hover:text-hive-brightText"
             }`}
           >
-            <CheckSquare className="w-3 h-3" /> 5m Tasks ({tasks.length})
+            <M3Icon name="checklist" size={14} /> 5m Tasks ({tasks.length})
           </button>
         </div>
       </div>
@@ -125,7 +125,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               onClick={() => setShowNewTaskForm(!showNewTaskForm)}
               className="text-[11px] text-hive-lime hover:underline flex items-center gap-0.5"
             >
-              <Plus className="w-3 h-3" /> New 5m Task
+              <M3Icon name="add_task" size={14} /> New 5m Task
             </button>
           </div>
 
@@ -170,7 +170,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           {hqChannel && (
             <div className="p-1.5 bg-hive-base/30">
               <div className="text-[10px] uppercase tracking-wider font-semibold text-hive-dimText px-2 py-1 flex items-center gap-1">
-                <Pin className="w-2.5 h-2.5 text-hive-lime" /> Pinned
+                <M3Icon name="keep" filled size={12} className="text-hive-lime" /> Pinned
               </div>
               <div
                 onClick={() => onSelectChannel(0)}
@@ -181,7 +181,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 }`}
               >
                 <div className="w-10 h-10 rounded-lg bg-hive-surface border border-hive-lime/40 flex items-center justify-center text-hive-lime font-bold text-lg flex-shrink-0">
-                  ⬡
+                  <M3Icon name="hub" filled size={20} />
                 </div>
 
                 <div className="flex-1 min-w-0">

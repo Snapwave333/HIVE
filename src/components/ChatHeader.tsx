@@ -1,6 +1,6 @@
 import React from "react";
 import { Channel, Agent } from "../types";
-import { VolumeX, Volume2, Maximize2, Minimize2, Search } from "lucide-react";
+import { M3Icon } from "./M3Icon";
 
 interface ChatHeaderProps {
   channel: Channel;
@@ -43,7 +43,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             color: avatarColor,
           }}
         >
-          {channel.id === 0 ? "⬡" : channel.name.slice(0, 2).toUpperCase()}
+          {channel.id === 0 ? (
+            <M3Icon name="hub" filled size={17} />
+          ) : (
+            channel.name.slice(0, 2).toUpperCase()
+          )}
         </div>
 
         <div className="min-w-0">
@@ -78,7 +82,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           title="Search messages (Ctrl+K)"
           aria-label="Search"
         >
-          <Search className="w-4 h-4" />
+          <M3Icon name="search" size={18} />
         </button>
 
         {/* Audio Mute Toggle Button */}
@@ -92,7 +96,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           title={isMuted ? "Audio Muted (Strict Invariant)" : "Speech Enabled (Click to Mute)"}
           aria-label="Toggle Audio Mute"
         >
-          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          <M3Icon name={isMuted ? "volume_off" : "volume_up"} filled={!isMuted} size={18} />
         </button>
 
         {/* Focus Mode Toggle (Ctrl+F11) */}
@@ -106,7 +110,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           title="Focus Mode (Ctrl+F11)"
           aria-label="Focus Mode"
         >
-          {isFocusMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          <M3Icon name={isFocusMode ? "close_fullscreen" : "open_in_full"} size={18} />
         </button>
       </div>
     </header>

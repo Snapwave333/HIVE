@@ -1,6 +1,6 @@
 import React from "react";
 import { TaskChunk } from "../types";
-import { CheckCircle2, Circle, Clock, CheckSquare, Bookmark } from "lucide-react";
+import { M3Icon } from "./M3Icon";
 
 interface TaskCardProps {
   task: TaskChunk;
@@ -19,8 +19,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
       {/* Task Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2 min-w-0">
-          <div className="p-1 rounded bg-hive-surface border border-hive-cyan/30 text-hive-cyan">
-            <CheckSquare className="w-3.5 h-3.5" />
+          <div className="p-1 rounded bg-hive-surface border border-hive-cyan/30 text-hive-cyan flex items-center justify-center">
+            <M3Icon name="checklist" size={15} />
           </div>
           <span className="font-semibold text-xs text-hive-brightText truncate">
             {task.title}
@@ -61,9 +61,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
               className="mt-0.5 text-hive-cyan hover:text-hive-lime transition-colors flex-shrink-0"
             >
               {currentStep.completed ? (
-                <CheckCircle2 className="w-4 h-4 text-hive-lime" />
+                <M3Icon name="check_circle" filled size={17} className="text-hive-lime" />
               ) : (
-                <Circle className="w-4 h-4" />
+                <M3Icon name="radio_button_unchecked" size={17} />
               )}
             </button>
             <div className="min-w-0">
@@ -72,7 +72,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
                   Action Step {currentStep.index + 1}/{totalCount}
                 </span>
                 <span className="text-[10px] text-hive-dimText flex items-center gap-0.5">
-                  <Clock className="w-2.5 h-2.5" /> ~{currentStep.estimated_minutes}m
+                  <M3Icon name="schedule" size={12} /> ~{currentStep.estimated_minutes}m
                 </span>
               </div>
               <p
@@ -92,7 +92,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStepToggle }) => {
       {/* Saved Checkpoint Indicator */}
       {task.resume_checkpoint && (
         <div className="mt-2 flex items-center text-[10px] text-hive-dimText space-x-1.5 bg-hive-base/50 px-2 py-1 rounded border border-hive-border/60">
-          <Bookmark className="w-3 h-3 text-hive-cyan flex-shrink-0" />
+          <M3Icon name="bookmark_added" size={13} className="text-hive-cyan flex-shrink-0" />
           <span className="truncate">Checkpoint: {task.resume_checkpoint}</span>
         </div>
       )}

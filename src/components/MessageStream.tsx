@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Message, Agent, TaskChunk, Channel } from "../types";
-import { Volume2, CornerUpLeft, Edit2, Trash2, Share2, Check, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TaskCard } from "./TaskCard";
+import { M3Icon } from "./M3Icon";
 
 interface MessageStreamProps {
   messages: Message[];
@@ -129,7 +129,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                       onClick={() => setEditingId(null)}
                       className="px-2 py-1 text-[10px] rounded bg-hive-surface text-hive-dimText hover:text-hive-brightText flex items-center gap-1"
                     >
-                      <X className="w-3 h-3" /> Cancel
+                      <M3Icon name="close" size={13} /> Cancel
                     </button>
                     <button
                       onClick={() => {
@@ -140,7 +140,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                       }}
                       className="px-2 py-1 text-[10px] rounded bg-hive-cyan text-hive-base font-semibold flex items-center gap-1"
                     >
-                      <Check className="w-3 h-3" /> Save
+                      <M3Icon name="check" size={13} /> Save
                     </button>
                   </div>
                 </div>
@@ -175,7 +175,9 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               {/* Attachments badge */}
               {msg.attachments && (
                 <div className="mt-2 px-2.5 py-1.5 rounded bg-hive-base/70 border border-hive-border text-[11px] font-mono text-hive-cyan flex items-center justify-between">
-                  <span>📎 Attachment attached</span>
+                  <span className="flex items-center gap-1">
+                    <M3Icon name="attach_file" size={13} /> Attachment attached
+                  </span>
                   <span className="text-hive-dimText text-[10px] truncate max-w-[180px]">
                     {msg.attachments}
                   </span>
@@ -209,7 +211,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                   <div className="flex items-center justify-between text-[10px] text-hive-dimText uppercase font-semibold">
                     <span>Forward message to:</span>
                     <button onClick={() => setForwardingId(null)} className="hover:text-hive-brightText">
-                      ✕
+                      <M3Icon name="close" size={13} />
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
@@ -245,7 +247,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                         : "Listen (Local TTS)"
                     }
                   >
-                    <Volume2 className="w-3 h-3" />
+                    <M3Icon name="record_voice_over" size={13} />
                     <span>TTS</span>
                   </button>
                 )}
@@ -266,7 +268,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                   className="p-1 hover:text-hive-cyan text-hive-dimText transition-colors"
                   title="Reply"
                 >
-                  <CornerUpLeft className="w-3 h-3" />
+                  <M3Icon name="reply" size={14} />
                 </button>
                 <button
                   onClick={() => onReact(msg.id, "👍")}
@@ -294,7 +296,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                   className="p-1 hover:text-hive-cyan text-hive-dimText transition-colors"
                   title="Forward Message"
                 >
-                  <Share2 className="w-3 h-3" />
+                  <M3Icon name="forward" size={14} />
                 </button>
                 {isUser && !msg.is_deleted && (
                   <>
@@ -306,14 +308,14 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                       className="p-1 hover:text-hive-cyan text-hive-dimText transition-colors"
                       title="Edit Message"
                     >
-                      <Edit2 className="w-3 h-3" />
+                      <M3Icon name="edit" size={14} />
                     </button>
                     <button
                       onClick={() => onDelete(msg.id)}
                       className="p-1 hover:text-red-400 text-hive-dimText transition-colors"
                       title="Delete Message"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <M3Icon name="delete" size={14} />
                     </button>
                   </>
                 )}

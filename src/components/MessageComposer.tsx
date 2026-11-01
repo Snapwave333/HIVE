@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Smile, Mic, Film } from "lucide-react";
+import { M3Icon } from "./M3Icon";
 
 interface MessageComposerProps {
   onSendMessage: (content: string, replyToId?: string, attachmentsJson?: string) => void;
@@ -153,7 +153,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             onClick={onCancelReply}
             className="text-hive-dimText hover:text-hive-brightText text-xs ml-2"
           >
-            ✕
+            <M3Icon name="close" size={14} />
           </button>
         </div>
       )}
@@ -161,12 +161,14 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       {/* Attached File Preview */}
       {attachedFileInfo && (
         <div className="mb-2 px-3 py-1.5 rounded bg-hive-surface border-l-2 border-hive-lime flex items-center justify-between text-xs font-mono">
-          <span className="text-hive-lime truncate">📎 {attachedFileInfo}</span>
+          <span className="text-hive-lime truncate flex items-center gap-1">
+            <M3Icon name="attach_file" size={14} /> {attachedFileInfo}
+          </span>
           <button
             onClick={() => setAttachedFileInfo(null)}
             className="text-hive-dimText hover:text-hive-brightText ml-2"
           >
-            ✕
+            <M3Icon name="close" size={14} />
           </button>
         </div>
       )}
@@ -236,7 +238,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           className="p-1.5 rounded hover:bg-hive-panel text-hive-dimText hover:text-hive-brightText transition-colors flex-shrink-0"
           title="Attach file (drag & drop or Ctrl+V paste supported)"
         >
-          <Paperclip className="w-4 h-4" />
+          <M3Icon name="attach_file" size={18} />
         </button>
 
         {/* Text Area */}
@@ -257,7 +259,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           className="p-1.5 rounded hover:bg-hive-panel text-hive-dimText hover:text-hive-cyan transition-colors flex-shrink-0"
           title="GIF Picker"
         >
-          <Film className="w-4 h-4" />
+          <M3Icon name="gif_box" size={18} />
         </button>
 
         {/* Kaomoji Trigger Button */}
@@ -275,7 +277,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           className="p-1.5 rounded hover:bg-hive-panel text-hive-dimText hover:text-hive-cyan transition-colors flex-shrink-0"
           title="Emoji Picker"
         >
-          <Smile className="w-4 h-4" />
+          <M3Icon name="mood" size={18} />
         </button>
 
         {/* Voice Status Indicator */}
@@ -287,7 +289,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           }`}
           title={isMuted ? "Audio muted by default (Strict Invariant)" : "Voice synthesis enabled"}
         >
-          <Mic className="w-4 h-4" />
+          <M3Icon name={isMuted ? "mic_off" : "mic"} filled={!isMuted} size={18} />
         </button>
 
         {/* Send Button */}
@@ -301,7 +303,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           }`}
           title="Send (Enter)"
         >
-          <Send className="w-4 h-4" />
+          <M3Icon name="send" filled={Boolean(text.trim() || attachedFileInfo)} size={18} />
         </button>
       </div>
     </div>

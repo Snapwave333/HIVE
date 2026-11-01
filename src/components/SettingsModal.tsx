@@ -8,21 +8,8 @@ import {
   AuditEntry,
   MemoryItem,
 } from "../types";
-import {
-  Shield,
-  Type,
-  Play,
-  Pause,
-  CheckCircle,
-  GitBranch,
-  RotateCcw,
-  Eye,
-  Database,
-  EyeOff,
-  Power,
-  Trash2,
-} from "lucide-react";
 import { api } from "../services/api";
+import { M3Icon } from "./M3Icon";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -120,7 +107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Modal Header */}
         <div className="p-4 border-b border-hive-border flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Shield className="w-5 h-5 text-hive-cyan" />
+            <M3Icon name="shield" filled size={20} className="text-hive-cyan" />
             <h2 className="text-sm font-semibold text-hive-brightText uppercase tracking-wider">
               Agency Settings, Governance & Constitution
             </h2>
@@ -129,19 +116,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={onClose}
             className="text-hive-dimText hover:text-hive-brightText text-sm px-2 py-1 rounded hover:bg-hive-surface"
           >
-            ✕
+            <M3Icon name="close" size={18} />
           </button>
         </div>
 
         {/* Sub-navigation Tabs */}
         <div className="flex border-b border-hive-border px-4 bg-hive-base/50 overflow-x-auto">
           {[
-            { id: "constitution", label: "Constitution" },
-            { id: "deployments", label: "UI Evolution & Rollback" },
-            { id: "society", label: "Society & Memory" },
-            { id: "accessibility", label: "Accessibility" },
-            { id: "bridges", label: "CLI Bridges" },
-            { id: "lifecycle", label: "Daemon Lifecycle" },
+            { id: "constitution", label: "Constitution", icon: "policy" },
+            { id: "deployments", label: "UI Evolution & Rollback", icon: "account_tree" },
+            { id: "society", label: "Society & Memory", icon: "groups" },
+            { id: "accessibility", label: "Accessibility", icon: "accessibility_new" },
+            { id: "bridges", label: "CLI Bridges", icon: "hub" },
+            { id: "lifecycle", label: "Daemon Lifecycle", icon: "settings_power" },
           ].map((t) => (
             <button
               key={t.id}
@@ -149,13 +136,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 setTab(t.id as any);
                 setStatusBanner(null);
               }}
-              className={`py-2.5 px-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+              className={`py-2.5 px-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                 tab === t.id
                   ? "border-hive-cyan text-hive-cyan"
                   : "border-transparent text-hive-dimText hover:text-hive-brightText"
               }`}
             >
-              {t.label}
+              <M3Icon name={t.icon} size={15} filled={tab === t.id} />
+              <span>{t.label}</span>
             </button>
           ))}
         </div>
@@ -164,7 +152,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="px-4 py-2 bg-hive-surface border-b border-hive-cyan/40 text-xs text-hive-cyan flex items-center justify-between">
             <span>{statusBanner}</span>
             <button onClick={() => setStatusBanner(null)} className="text-hive-dimText">
-              ✕
+              <M3Icon name="close" size={14} />
             </button>
           </div>
         )}
@@ -175,7 +163,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-3">
               <div className="p-3 bg-hive-surface rounded-lg border border-hive-border">
                 <span className="text-xs font-semibold text-hive-lime flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5" /> Immutable Constitution v1.0.0
+                  <M3Icon name="verified" filled size={16} /> Immutable Constitution v1.0.0
                 </span>
                 <p className="text-xs text-hive-dimText mt-1">
                   These invariants are machine-verified on every autonomous commit and Blue/Green deployment. Agents cannot alter or bypass them.
@@ -207,7 +195,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="p-3 bg-hive-surface rounded-lg border border-hive-border flex items-center justify-between">
                 <div>
                   <div className="font-semibold text-hive-brightText flex items-center gap-1.5">
-                    <GitBranch className="w-4 h-4 text-hive-lime" /> Blue/Green UI Version Manager
+                    <M3Icon name="account_tree" size={16} className="text-hive-lime" /> Blue/Green UI Version Manager
                   </div>
                   <p className="text-hive-dimText mt-0.5">
                     Every UI bundle is verified against Constitution v1.0.0, SHA-256 hashed, and backed up before atomic promotion.
@@ -218,7 +206,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => api.openPreviewWindow("preview")}
                     className="px-2.5 py-1.5 rounded bg-hive-base border border-hive-cyan/40 text-hive-cyan hover:bg-hive-cyan/10 flex items-center gap-1"
                   >
-                    <Eye className="w-3.5 h-3.5" /> Preview Window
+                    <M3Icon name="visibility" size={15} /> Preview Window
                   </button>
                   <button
                     onClick={handleDeployNewVersion}
@@ -230,7 +218,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={handleRollback}
                     className="px-2.5 py-1.5 rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 flex items-center gap-1"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> Rollback
+                    <M3Icon name="history" size={15} /> Rollback
                   </button>
                 </div>
               </div>
@@ -302,7 +290,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 {specialists.length === 0 ? (
                   <div className="text-hive-dimText italic">
-                    No active temporary specialists. Use `/spawn_temp name role SPONSOR` in chat.
+                    No active temporary specialists. Use `/spawn_temp name` in chat.
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -359,7 +347,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="text-hive-dimText hover:text-red-400 p-1"
                         title="Delete memory record"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <M3Icon name="delete" size={15} />
                       </button>
                     </div>
                   ))}
@@ -372,7 +360,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-4 text-xs">
               <div className="space-y-2">
                 <label className="font-semibold text-hive-brightText flex items-center gap-1.5">
-                  <Type className="w-4 h-4 text-hive-cyan" /> Typography Preset
+                  <M3Icon name="text_fields" size={16} className="text-hive-cyan" /> Typography Preset
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
@@ -498,7 +486,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={() => api.hideMainWindow()}
                   className="p-3 rounded border bg-hive-surface border-hive-border text-hive-brightText hover:border-hive-cyan flex items-center justify-center gap-1.5 font-medium"
                 >
-                  <EyeOff className="w-4 h-4 text-hive-cyan" /> Hide Window (Tray)
+                  <M3Icon name="visibility_off" size={16} className="text-hive-cyan" /> Hide Window (Tray)
                 </button>
 
                 {agencyState === "running" ? (
@@ -506,14 +494,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => onSetAgencyState("paused")}
                     className="p-3 rounded border bg-hive-surface border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10 flex items-center justify-center gap-1.5 font-medium"
                   >
-                    <Pause className="w-4 h-4" /> Pause Agency
+                    <M3Icon name="pause" filled size={16} /> Pause Agency
                   </button>
                 ) : (
                   <button
                     onClick={() => onSetAgencyState("running")}
                     className="p-3 rounded border bg-hive-lime text-hive-base border-hive-lime flex items-center justify-center gap-1.5 font-semibold"
                   >
-                    <Play className="w-4 h-4" /> Resume Agency
+                    <M3Icon name="play_arrow" filled size={16} /> Resume Agency
                   </button>
                 )}
 
@@ -521,7 +509,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={() => api.stopAgencyAndQuit()}
                   className="p-3 rounded border bg-red-500/15 border-red-500/40 text-red-300 hover:bg-red-500/25 flex items-center justify-center gap-1.5 font-medium"
                 >
-                  <Power className="w-4 h-4" /> Stop Agency & Quit
+                  <M3Icon name="power_settings_new" size={16} /> Stop Agency & Quit
                 </button>
               </div>
 
@@ -537,7 +525,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={handleBackupNow}
                   className="px-3 py-1.5 rounded bg-hive-surface border border-hive-cyan/40 text-hive-cyan hover:bg-hive-cyan/10 flex items-center gap-1.5"
                 >
-                  <Database className="w-3.5 h-3.5" /> Backup Now
+                  <M3Icon name="database" size={15} /> Backup Now
                 </button>
               </div>
 
