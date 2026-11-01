@@ -204,6 +204,7 @@ USAGE:
   hive <command> [options]
 
 COMMANDS:
+  launch           Launch interactive H.I.V.E. Unity Editor & Command Chamber
   capture          Take headless 3D screenshots of operational scenes
   test             Execute comprehensive end-to-end integration test suite
   scenes           Rebuild and wire all 7 HQ scenes and cybernetic prefabs
@@ -218,16 +219,50 @@ CAPTURE OPTIONS:
   --mode <mode>    Camera mode: FirstPerson, ThirdPerson, Isometric, Overview
 
 EXAMPLES:
+  .\hive.cmd launch
   .\hive.cmd capture
   .\hive.cmd capture --scene CommandChamber --res 3840x2160 --out stills
-  .\hive.cmd capture --scene Workspaces --mode Overview
   .\hive.cmd test
   .\hive.cmd doctor
 "@
 }
 
+function Invoke-Launch {
+    Write-Host "[HIVE CLI] Initiating Agency Launch Protocol..." -ForegroundColor Cyan
+    
+    # 1. Run recovery watchdog check
+    Write-Host "  [1/3] Verifying Recovery Supervisor..." -ForegroundColor Gray
+    try {
+        & py "$ProjectRoot\scripts\recovery\hive_recovery.py" watchdog
+    } catch {
+        Write-Host "  [WARN] Watchdog check encountered an issue." -ForegroundColor Yellow
+    }
+
+    # 2. Check scene availability
+    $scenePath = Join-Path $ProjectRoot "Assets\Scenes\CommandChamber.unity"
+    if (-not (Test-Path $scenePath)) {
+        Write-Host "  [2/3] Operational scene missing. Rebuilding scenes..." -ForegroundColor Yellow
+        Invoke-Scenes
+    } else {
+        Write-Host "  [2/3] Primary Command Chamber verified." -ForegroundColor Gray
+    }
+
+    # 3. Launch Unity
+    Write-Host "  [3/3] Launching H.I.V.E. 3D Agency in Unity Editor..." -ForegroundColor Green
+    $unityArgs = @(
+        "-projectPath", "`"$ProjectRoot`"",
+        "-openfile", "`"$scenePath`""
+    )
+    $proc = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru
+    Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. launched! PID: $($proc.Id)" -ForegroundColor Green
+    Write-Host "Active Scene: CommandChamber.unity" -ForegroundColor Cyan
+    Write-Host "12 Autonomous Agents: Standby / Operational" -ForegroundColor DarkCyan
+}
+
 # Main Dispatch
 switch ($Command) {
+    "launch"  { Show-Header; Invoke-Launch }
+    "run"     { Show-Header; Invoke-Launch }
     "capture" { Show-Header; Invoke-Capture -ArgsList $RemainingArgs }
     "test"    { Show-Header; Invoke-Test }
     "scenes"  { Show-Header; Invoke-Scenes }
