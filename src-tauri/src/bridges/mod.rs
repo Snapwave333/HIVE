@@ -1,6 +1,8 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -147,7 +149,11 @@ impl EcosystemBridges {
             cmd_args.push(s.as_str());
         }
 
-        let output = Command::new("cmd").args(&cmd_args).output()?;
+        let mut cmd = Command::new("cmd");
+        cmd.args(&cmd_args);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000);
+        let output = cmd.output()?;
 
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -248,7 +254,11 @@ impl EcosystemBridges {
             Self::sanitize_arg(a)?;
             cmd_args.push(a);
         }
-        let output = Command::new("cmd").args(&cmd_args).output()?;
+        let mut cmd = Command::new("cmd");
+        cmd.args(&cmd_args);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000);
+        let output = cmd.output()?;
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         if output.status.success() {

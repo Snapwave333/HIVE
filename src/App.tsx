@@ -155,6 +155,13 @@ export const App: React.FC = () => {
             }
           } else if (payload.type === "agent.typing") {
             const data = payload.payload;
+            setAgents((prev) =>
+              prev.map((a) =>
+                a.codename === data.agent
+                  ? { ...a, status: data.is_typing ? "thinking" : "available" }
+                  : a
+              )
+            );
             if (data.channel_id === activeChannelId) {
               if (data.is_typing) {
                 setTypingIndicator({ agent: data.agent, activity: data.activity });
@@ -162,7 +169,7 @@ export const App: React.FC = () => {
                 setTypingIndicator(null);
               }
             }
-          } else if (payload.type === "task.step_completed") {
+          } else if (payload.type === "task.step_completed" || payload.type === "task.created") {
             api.getTasks().then(setTasks);
           } else if (payload.type === "system.lifecycle") {
             setAgencyState(payload.payload.state);

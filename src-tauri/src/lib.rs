@@ -519,8 +519,12 @@ pub fn run() {
                 }
             });
 
-            // Prevent window close from exiting app (hide to tray instead)
+            // Ensure main window is visible and focused on launch, and hide to tray on close
             if let Some(window) = handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+
                 let win_clone = window.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
