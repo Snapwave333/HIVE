@@ -170,6 +170,7 @@ graph TD
 | `HIVE_OBSIDIAN_VAULT` | Environment | `~/Documents/HIVE-Vault` |
 | `daemon_interval_secs` | `app_settings` table | `20` |
 | Font, font size, mute | Settings → Accessibility (persisted) | Segoe, 14px, muted |
+| Silent pop-ups for agent DMs | Settings → Accessibility | off |
 
 **Data** lives in `%APPDATA%\Lushapps\HIVE\`:
 
@@ -179,6 +180,7 @@ backups/hive_<date>.db daily snapshot (+ /backup)
 frontend/versions/     UI bundle snapshots with manifests
 attachments/           content-addressed uploads
 cache/audio/           synthesized speech
+logs/hive.log          app log (rotates at 5 MB; set RUST_LOG=debug for more)
 ```
 
 ---

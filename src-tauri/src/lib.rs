@@ -644,7 +644,81 @@ Create an initial portfolio of projects covering:
 
 PRIME, convene the agency and begin operations."##;
 
+fn maybe_notify<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    last_notified: &mut std::collections::HashMap<i64, std::time::Instant>,
+    channel_id: i64,
+    sender: &str,
+    content: &str,
+) {
+    use tauri_plugin_notification::NotificationExt;
+    let state = app.state::<AppState>();
+    let setting = state.db.get_setting("desktop_notifications").ok().flatten();
+    let window_active = app
+        .get_webview_window("main")
+        .map(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) && w.is_focused().unwrap_or(false))
+        .unwrap_or(false);
+    if !agents::should_notify(setting.as_deref(), channel_id, sender, window_active) {
+        return;
+    }
+    if last_notified
+        .get(&channel_id)
+        .map(|t| t.elapsed() < std::time::Duration::from_secs(agents::NOTIFY_THROTTLE_SECS))
+        .unwrap_or(false)
+    {
+        return;
+    }
+    last_notified.insert(channel_id, std::time::Instant::now());
+    let title = state
+        .db
+        .get_agent(sender)
+        .ok()
+        .flatten()
+        .map(|a| format!("@{} · {}", a.codename, a.display_name))
+        .unwrap_or_else(|| format!("@{}", sender));
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title(title)
+        .body(agents::notification_body(content, 160))
+        .show()
+    {
+        log::warn!("Desktop notification failed: {}", e);
+    }
+}
+
+pub const LOG_MAX_BYTES: u64 = 5 * 1024 * 1024;
+
+pub fn log_file_path() -> std::path::PathBuf {
+    Database::app_root_dir().join("logs").join("hive.log")
+}
+
+pub fn rotate_log(path: &std::path::Path, max_bytes: u64) -> std::io::Result<()> {
+    if std::fs::metadata(path).map(|m| m.len() > max_bytes).unwrap_or(false) {
+        let old = path.with_extension("log.1");
+        let _ = std::fs::remove_file(&old);
+        std::fs::rename(path, old)?;
+    }
+    Ok(())
+}
+
+fn init_logging() {
+    let path = log_file_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = rotate_log(&path, LOG_MAX_BYTES);
+    let mut builder = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,hive_lib=info"));
+    builder.format_timestamp_millis();
+    if let Ok(file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        builder.target(env_logger::Target::Pipe(Box::new(file)));
+    }
+    let _ = builder.try_init();
+    log::info!("H.I.V.E. {} starting, logging to {}", env!("CARGO_PKG_VERSION"), path.display());
+}
+
 pub fn run() {
+    init_logging();
     let state = AppState::new().expect("Failed to initialize H.I.V.E. Application State");
 
     let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
@@ -714,10 +788,15 @@ pub fn run() {
             let mut rx = event_bus.subscribe();
             let webview_handle = handle.clone();
             tauri::async_runtime::spawn(async move {
+                let mut last_notified: std::collections::HashMap<i64, std::time::Instant> =
+                    std::collections::HashMap::new();
                 loop {
                     match rx.recv().await {
                         Ok(event) => {
                             let _ = webview_handle.emit("hive-event", &event);
+                            if let events::HiveEvent::MessageCreated { channel_id, sender, content, .. } = &event {
+                                maybe_notify(&webview_handle, &mut last_notified, *channel_id, sender, content);
+                            }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             log::warn!("Event bridge lagged, skipped {} events", skipped);

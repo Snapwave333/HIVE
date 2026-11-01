@@ -269,6 +269,7 @@ impl Database {
             ("sensory_mode", "silent"),
             ("purchase_cooling_hours", "48"),
             ("auto_start_windows", "false"),
+            ("desktop_notifications", "off"),
         ];
 
         for (k, v) in settings {

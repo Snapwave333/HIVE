@@ -359,3 +359,43 @@ fn search_benchmark_fts_vs_like() {
     let like = t.elapsed() / 50;
     println!("30k messages: FTS {:?} per query, LIKE scan {:?} per query", fts, like);
 }
+
+#[test]
+fn notifications_are_opt_in_dm_only_and_plain_text() {
+    assert!(!agents::should_notify(None, 3, "FORGE", false), "off unless the owner opts in");
+    assert!(!agents::should_notify(Some("off"), 3, "FORGE", false));
+    assert!(agents::should_notify(Some("dms"), 3, "FORGE", false));
+    assert!(!agents::should_notify(Some("dms"), 0, "FORGE", false), "#agency-hq chatter never pops up");
+    assert!(!agents::should_notify(Some("dms"), 3, "user", false), "your own messages never notify you");
+    assert!(!agents::should_notify(Some("dms"), 3, "FORGE", true), "no pop-ups while you're looking at the app");
+
+    let body = agents::notification_body(
+        "## Heads up\n**Build** is _green_ now.\n```rust\nfn main() {}\n```\n- next: `ship it`",
+        200,
+    );
+    assert_eq!(body, "Heads up Build is green now. [code] next: ship it");
+    assert!(agents::notification_body(&"word ".repeat(100), 40).ends_with('…'));
+
+    let db = Database::new_in_memory().unwrap();
+    assert_eq!(db.get_setting("desktop_notifications").unwrap().as_deref(), Some("off"));
+}
+
+#[test]
+fn log_rotation_keeps_one_previous_file() {
+    let dir = std::env::temp_dir().join(format!("hive-log-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let log = dir.join("hive.log");
+    std::fs::write(&log, vec![b'x'; 100]).unwrap();
+    hive_lib::rotate_log(&log, 1_000).unwrap();
+    assert!(log.exists(), "small logs are left alone");
+
+    std::fs::write(&log, vec![b'y'; 2_000]).unwrap();
+    hive_lib::rotate_log(&log, 1_000).unwrap();
+    assert!(!log.exists());
+    assert_eq!(std::fs::read(dir.join("hive.log.1")).unwrap().len(), 2_000);
+
+    std::fs::write(&log, vec![b'z'; 3_000]).unwrap();
+    hive_lib::rotate_log(&log, 1_000).unwrap();
+    assert_eq!(std::fs::read(dir.join("hive.log.1")).unwrap()[0], b'z', "only the newest rotated log is kept");
+    let _ = std::fs::remove_dir_all(dir);
+}

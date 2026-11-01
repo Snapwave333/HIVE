@@ -82,6 +82,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const [notifyDms, setNotifyDms] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      api
+        .getSetting("desktop_notifications")
+        .then((v) => setNotifyDms(v === "dms"))
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
+  const handleToggleNotify = async () => {
+    const next = !notifyDms;
+    setNotifyDms(next);
+    try {
+      await api.setSetting("desktop_notifications", next ? "dms" : "off");
+    } catch (e) {
+      setNotifyDms(!next);
+      setStatusBanner(`Couldn't save notification setting: ${String(e)}`, true);
+    }
+  };
+
   useEffect(() => {
     if (bridgeStatus) setLiveBridges(bridgeStatus);
   }, [bridgeStatus]);
@@ -461,6 +483,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => onSetFontSize(Number(e.target.value))}
                   className="w-full accent-hive-cyan bg-hive-surface h-1.5 rounded-lg appearance-none cursor-pointer"
                 />
+              </div>
+
+              <div className="p-3 bg-hive-surface rounded-lg border border-hive-border flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-semibold text-hive-brightText">Silent pop-ups for agent DMs</div>
+                  <p className="text-hive-dimText mt-0.5">
+                    When H.I.V.E. is hidden or in the background, show a silent desktop notification for direct messages from agents. Never for #agency-hq chatter, at most one per agent every 20 seconds, and no sound. Off by default.
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifyDms}
+                  onClick={handleToggleNotify}
+                  className={`shrink-0 w-11 h-6 rounded-full border transition-colors relative ${
+                    notifyDms ? "bg-hive-lime/30 border-hive-lime/60" : "bg-hive-base border-hive-border"
+                  }`}
+                  title={notifyDms ? "On: click to turn off" : "Off: click to turn on"}
+                >
+                  <span
+                    className={`absolute top-0.5 w-[18px] h-[18px] rounded-full transition-all ${
+                      notifyDms ? "left-[22px] bg-hive-lime" : "left-0.5 bg-hive-dimText"
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="p-3 bg-hive-surface rounded-lg border border-hive-border space-y-1">

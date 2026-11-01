@@ -433,6 +433,41 @@ pub fn with_attachment_notes(db: &Database, history: &[Message]) -> Vec<Message>
         .collect()
 }
 
+pub const NOTIFY_THROTTLE_SECS: u64 = 20;
+
+pub fn notification_body(content: &str, max_chars: usize) -> String {
+    let mut out = String::new();
+    let mut in_code = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code = !in_code;
+            if in_code {
+                out.push_str(" [code] ");
+            }
+            continue;
+        }
+        if in_code {
+            continue;
+        }
+        let cleaned: String = trimmed
+            .trim_start_matches(['#', '>', '-', '*', '•', ' '])
+            .chars()
+            .filter(|c| !matches!(c, '*' | '`' | '_' | '~'))
+            .collect();
+        if !cleaned.trim().is_empty() {
+            out.push_str(cleaned.trim());
+            out.push(' ');
+        }
+    }
+    let collapsed = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    truncate_chars(&collapsed, max_chars)
+}
+
+pub fn should_notify(setting: Option<&str>, channel_id: i64, sender: &str, window_active: bool) -> bool {
+    setting == Some("dms") && channel_id > 0 && sender != "user" && !window_active
+}
+
 pub fn post_message(
     db: &Database,
     events: &EventBus,
