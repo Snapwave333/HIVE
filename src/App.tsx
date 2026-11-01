@@ -259,7 +259,7 @@ export const App: React.FC = () => {
             file.type || "application/octet-stream",
             base64
           );
-          resolve(rec.storage_path);
+          resolve(rec.file_path);
         } catch (e) {
           console.error("Attachment upload error:", e);
           resolve(null);

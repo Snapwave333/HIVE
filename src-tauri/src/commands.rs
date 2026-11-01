@@ -185,7 +185,7 @@ pub fn create_task(
     let steps_tuple: Vec<(&str, u32)> = steps.iter().map(|s| (s.as_str(), 5)).collect();
     state
         .daemon
-        .create_demo_task(&title, &assignee, steps_tuple)
+        .create_task_chunk(&title, &assignee, steps_tuple)
         .map_err(|e| e.to_string())
 }
 

@@ -12,113 +12,10 @@ import {
   BridgeStatus,
   Constitution,
 } from "../types";
-
-// Check if running inside Tauri webview
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+import { invoke } from "@tauri-apps/api/core";
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (isTauri) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>(cmd, args);
-  }
-  console.warn(`[Tauri Mock] ${cmd}`, args);
-  return mockHandler<T>(cmd, args);
-}
-
-const mockChannels: Channel[] = [
-  { id: 0, name: "agency-hq", slug: "agency-hq", is_group: true, description: "Primary Agency Group Chat", pinned: true, created_at: new Date().toISOString() },
-  { id: 1, name: "Prime", slug: "prime", is_group: false, agent_codename: "PRIME", description: "Command / Strategy", pinned: false, created_at: new Date().toISOString() },
-  { id: 2, name: "Sage", slug: "sage", is_group: false, agent_codename: "SAGE", description: "Research & Analysis", pinned: false, created_at: new Date().toISOString() },
-  { id: 3, name: "Forge", slug: "forge", is_group: false, agent_codename: "FORGE", description: "Engineering / Build", pinned: false, created_at: new Date().toISOString() },
-  { id: 4, name: "Sentinel", slug: "sentinel", is_group: false, agent_codename: "SENTINEL", description: "Security & Audit", pinned: false, created_at: new Date().toISOString() },
-  { id: 5, name: "Voice", slug: "voice", is_group: false, agent_codename: "VOICE", description: "Communications", pinned: false, created_at: new Date().toISOString() },
-  { id: 6, name: "Archivist", slug: "archivist", is_group: false, agent_codename: "ARCHIVIST", description: "Knowledge & Memory", pinned: false, created_at: new Date().toISOString() },
-  { id: 7, name: "Conductor", slug: "conductor", is_group: false, agent_codename: "CONDUCTOR", description: "Operations / Queue", pinned: false, created_at: new Date().toISOString() },
-  { id: 8, name: "Vision", slug: "vision", is_group: false, agent_codename: "VISION", description: "Creative / Design", pinned: false, created_at: new Date().toISOString() },
-  { id: 9, name: "Ledger", slug: "ledger", is_group: false, agent_codename: "LEDGER", description: "Finance / Resources", pinned: false, created_at: new Date().toISOString() },
-  { id: 10, name: "Link", slug: "link", is_group: false, agent_codename: "LINK", description: "Integration / Tools", pinned: false, created_at: new Date().toISOString() },
-  { id: 11, name: "Gauge", slug: "gauge", is_group: false, agent_codename: "GAUGE", description: "Quality / Verification", pinned: false, created_at: new Date().toISOString() },
-  { id: 12, name: "Spark", slug: "spark", is_group: false, agent_codename: "SPARK", description: "Innovation / Experiments", pinned: false, created_at: new Date().toISOString() },
-];
-
-const mockAgents: Agent[] = [
-  { codename: "PRIME", display_name: "Prime", role: "Command / Strategy", model_tier: "nvidia/nemotron-3-ultra-550b-a55b", status: "available", avatar_config: '{"primary_color":"#85D94B","secondary_color":"#42CFC4"}', updated_at: new Date().toISOString() },
-  { codename: "SAGE", display_name: "Sage", role: "Research & Analysis", model_tier: "nvidia/nemotron-3.5-super-vl-120b-a12b", status: "available", avatar_config: '{"primary_color":"#42CFC4","secondary_color":"#85D94B"}', updated_at: new Date().toISOString() },
-  { codename: "FORGE", display_name: "Forge", role: "Engineering / Build", model_tier: "nvidia/nemotron-3.5-lightning-30b-a3b", status: "available", avatar_config: '{"primary_color":"#85D94B","secondary_color":"#42CFC4"}', updated_at: new Date().toISOString() },
-  { codename: "SENTINEL", display_name: "Sentinel", role: "Security & Audit", model_tier: "mistralai/mistral-large-4-1t-a52b", status: "available", avatar_config: '{"primary_color":"#E45B5B","secondary_color":"#B8E8D8"}', updated_at: new Date().toISOString() },
-  { codename: "VOICE", display_name: "Voice", role: "Communications", model_tier: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", status: "available", avatar_config: '{"primary_color":"#42CFC4","secondary_color":"#B8E8D8"}', updated_at: new Date().toISOString() },
-  { codename: "ARCHIVIST", display_name: "Archivist", role: "Knowledge & Memory", model_tier: "openai/gpt-oss-20b", status: "available", avatar_config: '{"primary_color":"#B8E8D8","secondary_color":"#42CFC4"}', updated_at: new Date().toISOString() },
-  { codename: "CONDUCTOR", display_name: "Conductor", role: "Operations / Queue", model_tier: "minimaxai/minimax-m3.1-flash", status: "available", avatar_config: '{"primary_color":"#85D94B","secondary_color":"#B8E8D8"}', updated_at: new Date().toISOString() },
-  { codename: "VISION", display_name: "Vision", role: "Creative / Design", model_tier: "nvidia/nemotron-3.5-super-vl-120b-a12b", status: "available", avatar_config: '{"primary_color":"#42CFC4","secondary_color":"#85D94B"}', updated_at: new Date().toISOString() },
-  { codename: "LEDGER", display_name: "Ledger", role: "Finance / Resources", model_tier: "nvidia/nemotron-3-ultra-550b-a55b", status: "available", avatar_config: '{"primary_color":"#E5A94B","secondary_color":"#85D94B"}', updated_at: new Date().toISOString() },
-  { codename: "LINK", display_name: "Link", role: "Integration / Tools", model_tier: "mistralai/mistral-large-4-1t-a52b", status: "available", avatar_config: '{"primary_color":"#42CFC4","secondary_color":"#85D94B"}', updated_at: new Date().toISOString() },
-  { codename: "GAUGE", display_name: "Gauge", role: "Quality / Verification", model_tier: "nvidia/nemotron-3.5-lightning-30b-a3b", status: "available", avatar_config: '{"primary_color":"#385C32","secondary_color":"#85D94B"}', updated_at: new Date().toISOString() },
-  { codename: "SPARK", display_name: "Spark", role: "Innovation / Experiments", model_tier: "nvidia/nemotron-3.5-bolt-e4b", status: "available", avatar_config: '{"primary_color":"#85D94B","secondary_color":"#42CFC4"}', updated_at: new Date().toISOString() },
-];
-
-const mockMessages: Message[] = [
-  {
-    id: "welcome-1",
-    channel_id: 0,
-    sender: "PRIME",
-    sender_role: "Command / Strategy",
-    content: "⬡ **H.I.V.E. Agency Online**\n\nAll 12 permanent agents are initialized and synchronized. The agency operates 24/7 across `#agency-hq` and 12 dedicated agent direct lines.\n\n* **PRIME**: Standing by for command directives and strategic planning.\n* **FORGE & GAUGE**: Engineering and verification pipelines active.\n* **SENTINEL**: Threat modeling and permission sandbox locked.\n* **ARCHIVIST**: Knowledge archive and memory graph ready.\n\nType `/help` or `@agent` to coordinate.",
-    is_pinned: true,
-    is_edited: false,
-    is_deleted: false,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }
-];
-
-function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
-  switch (cmd) {
-    case "get_channels":
-      return mockChannels as unknown as T;
-    case "get_agents":
-      return mockAgents as unknown as T;
-    case "get_messages": {
-      const channelId = (args?.channel_id as number) ?? 0;
-      return mockMessages.filter((m) => m.channel_id === channelId) as unknown as T;
-    }
-    case "send_message": {
-      const newMsg: Message = {
-        id: "msg-" + Date.now(),
-        channel_id: (args?.channel_id as number) ?? 0,
-        sender: "user",
-        sender_role: "Owner",
-        content: (args?.content as string) ?? "",
-        is_pinned: false,
-        is_edited: false,
-        is_deleted: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      mockMessages.push(newMsg);
-      return newMsg as unknown as T;
-    }
-    case "get_bridge_status":
-      return {
-        google_connected: true,
-        google_account: "elikenny333@gmail.com",
-        obsidian_available: true,
-        browser_relay_available: true,
-        voice_engine_available: true,
-      } as unknown as T;
-    case "get_audio_mute_state":
-      return true as unknown as T;
-    case "get_agency_state":
-      return "running" as unknown as T;
-    case "get_relationships":
-    case "get_temp_specialists":
-    case "get_ui_deployments":
-    case "get_audit_log":
-    case "get_memories":
-    case "get_tasks":
-      return [] as unknown as T;
-    default:
-      return {} as unknown as T;
-  }
+  return invoke<T>(cmd, args);
 }
 
 export const api = {
@@ -148,7 +45,7 @@ export const api = {
     tauriInvoke<AttachmentRecord>("upload_attachment", {
       filename,
       mime_type: mimeType,
-      base64_data: base64Data,
+      data_base64: base64Data,
     }),
   getTasks: (statusFilter?: string) =>
     tauriInvoke<TaskChunk[]>("get_tasks", { status_filter: statusFilter }),
@@ -163,41 +60,39 @@ export const api = {
     }),
   getMemories: (category?: string) =>
     tauriInvoke<MemoryItem[]>("get_memories", { category }),
-  updateMemory: (memoryId: string, content: string, confidence: number) =>
-    tauriInvoke<void>("update_memory", { memory_id: memoryId, content, confidence }),
+  updateMemory: (memoryId: string, content: string, isSpeculation = false) =>
+    tauriInvoke<void>("update_memory", { id: memoryId, content, is_speculation: isSpeculation }),
   deleteMemory: (memoryId: string) =>
-    tauriInvoke<void>("delete_memory", { memory_id: memoryId }),
+    tauriInvoke<void>("delete_memory", { id: memoryId }),
   getRelationships: () => tauriInvoke<RelationshipEdge[]>("get_relationships"),
   getTempSpecialists: () => tauriInvoke<TempSpecialist[]>("get_temp_specialists"),
   spawnTempSpecialist: (
-    codename: string,
-    displayName: string,
+    name: string,
     role: string,
-    sponsorAgent: string,
+    sponsor: string,
     ttlMinutes: number
   ) =>
     tauriInvoke<TempSpecialist>("spawn_temp_specialist", {
-      codename,
-      display_name: displayName,
+      name,
       role,
-      sponsor_agent: sponsorAgent,
+      sponsor,
       ttl_minutes: ttlMinutes,
     }),
   getUiDeployments: () => tauriInvoke<UiDeployment[]>("get_ui_deployments"),
   deployUiVersion: (
     version: string,
     authorAgent: string,
-    changelog: string,
-    approvalTier: string
+    summary: string,
+    activate = true
   ) =>
     tauriInvoke<UiDeployment>("deploy_ui_version", {
       version,
       author_agent: authorAgent,
-      changelog,
-      approval_tier: approvalTier,
+      summary,
+      activate,
     }),
   rollbackUiVersion: (reason: string) =>
-    tauriInvoke<string>("rollback_ui_version", { reason }),
+    tauriInvoke<UiDeployment>("rollback_ui_version", { reason }),
   openPreviewWindow: (version: string) =>
     tauriInvoke<void>("open_preview_window", { version }),
   getAuditLog: (limit?: number) =>

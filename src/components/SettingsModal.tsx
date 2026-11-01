@@ -73,16 +73,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleDeployNewVersion = async () => {
     try {
-      const nextVer = `1.0.${deployments.length + 1}`;
+      const nextVer = `v1.0.${deployments.length}`;
       await api.deployUiVersion(
         nextVer,
         "VISION",
         "Autonomous UI refinement verified against Constitution v1.0.0",
-        "autonomous"
+        true
       );
       const updated = await api.getUiDeployments();
       setDeployments(updated);
-      setStatusBanner(`Deployed v${nextVer} with verified SHA-256 bundle & backup.`);
+      setStatusBanner(`Deployed ${nextVer} with verified SHA-256 bundle & backup.`);
     } catch (e) {
       setStatusBanner(`Deployment blocked: ${String(e)}`);
     }
@@ -93,7 +93,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const target = await api.rollbackUiVersion("Manual user rollback from Settings");
       const updated = await api.getUiDeployments();
       setDeployments(updated);
-      setStatusBanner(`Rolled back atomically to v${target}.`);
+      setStatusBanner(`Rolled back atomically to ${target.version}.`);
     } catch (e) {
       setStatusBanner(`Rollback notice: ${String(e)}`);
     }
@@ -243,23 +243,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <div>
                       <div className="flex items-center space-x-2">
-                        <span className="font-mono font-bold text-hive-cyan">v{d.version}</span>
+                        <span className="font-mono font-bold text-hive-cyan">{d.version}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-hive-base border border-hive-border text-hive-dimText font-mono">
                           @{d.author_agent}
                         </span>
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                            d.status === "active"
+                            d.is_active
                               ? "bg-hive-lime/15 text-hive-lime border border-hive-lime/30"
                               : "bg-hive-base text-hive-dimText"
                           }`}
                         >
-                          {d.status.toUpperCase()}
+                          {d.is_active ? "ACTIVE" : "ARCHIVED"}
                         </span>
                       </div>
-                      <div className="text-hive-brightText mt-1">{d.changelog}</div>
+                      <div className="text-hive-brightText mt-1">{d.verification_log || d.directory_path}</div>
                       <div className="text-[10px] text-hive-dimText font-mono mt-0.5">
-                        SHA-256: {d.bundle_hash.slice(0, 24)}...
+                        SHA-256: {d.sha256_hash.slice(0, 24)}...
                       </div>
                     </div>
                   </div>
@@ -308,7 +308,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="space-y-1.5">
                     {specialists.map((s) => (
                       <div
-                        key={s.id}
+                        key={s.codename}
                         className="p-2 rounded bg-hive-surface border border-hive-cyan/30 flex items-center justify-between"
                       >
                         <div>
@@ -546,16 +546,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Recent Security & Governance Audit Log
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1 font-mono text-[10px]">
-                  {auditLogs.map((a) => (
+                  {auditLogs.map((a, idx) => (
                     <div
-                      key={a.id}
+                      key={a.id ?? idx}
                       className="px-2 py-1 rounded bg-hive-base border border-hive-border flex items-center justify-between"
                     >
                       <span className="text-hive-cyan">
-                        [{a.actor}] {a.action}
+                        [{a.actor}] {a.event_type}
                       </span>
                       <span className="text-hive-dimText truncate max-w-[260px]">
-                        {a.details || a.target}
+                        {a.details} ({a.status})
                       </span>
                     </div>
                   ))}

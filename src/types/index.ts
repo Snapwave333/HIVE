@@ -78,51 +78,47 @@ export interface RelationshipEdge {
   target_agent: string;
   edge_type: string;
   weight: number;
-  interaction_count: number;
-  last_interaction_at: string;
   notes?: string;
+  updated_at: string;
 }
 
 export interface TempSpecialist {
-  id: string;
   codename: string;
   display_name: string;
   role: string;
   sponsor_agent: string;
-  task_id?: string;
-  status: string;
+  permissions: string;
   expires_at: string;
+  status: string;
   created_at: string;
 }
 
 export interface AttachmentRecord {
-  id: string;
-  message_id?: string;
+  hash: string;
   filename: string;
   mime_type: string;
   size_bytes: number;
-  sha256_hash: string;
-  storage_path: string;
+  file_path: string;
+  data_url?: string;
   created_at: string;
 }
 
 export interface UiDeployment {
   version: string;
-  bundle_hash: string;
+  directory_path: string;
+  sha256_hash: string;
   author_agent: string;
-  changelog: string;
-  approval_tier: string;
-  status: string;
-  previous_version?: string;
+  verification_log?: string;
+  is_active: boolean;
   created_at: string;
 }
 
 export interface AuditEntry {
-  id: number;
+  id?: number;
+  event_type: string;
   actor: string;
-  action: string;
-  target?: string;
-  details?: string;
+  details: string;
+  status: string;
   timestamp: string;
 }
 
@@ -130,8 +126,10 @@ export interface BridgeStatus {
   google_connected: boolean;
   google_account: string;
   obsidian_available: boolean;
+  obsidian_vault_path: string;
   browser_relay_available: boolean;
   voice_engine_available: boolean;
+  llm_provider: string;
 }
 
 export interface ConstitutionInvariant {

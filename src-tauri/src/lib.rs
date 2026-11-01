@@ -118,23 +118,22 @@ impl AppState {
 
             let _ = db.update_agent_status(lead_agent, "thinking");
             events.emit_typing(channel_id, lead_agent, activity_desc, true);
-            tokio::time::sleep(tokio::time::Duration::from_millis(450)).await;
 
             let (agent_code, role, reply): (String, String, String) = if lower == "/help" {
                 (
                     "PRIME".to_string(),
                     "Command / Strategy".to_string(),
                     "⬡ **H.I.V.E. Command & Slash Reference**\n\n\
-                    * `/task <title>` — Decompose a goal into **~5-minute ADHD-friendly micro-steps** with saved checkpoints (`@CONDUCTOR`)\n\
+                    * `/task <title>` — Decompose a goal into **~5-minute ADHD-friendly micro-steps** via `@CONDUCTOR` NIM LLM\n\
                     * `/gog <args>` — Execute authenticated Google CLI (`elikenny333@gmail.com`) e.g. `/gog calendar calendars`, `/gog drive ls` (`@LINK`)\n\
                     * `/obsidian <title> | <note>` — Curate or search markdown notes in your local Obsidian vault (`@ARCHIVIST`)\n\
                     * `/browser <status|tabs>` — Query OpenCode Chrome Relay (`@LINK`)\n\
-                    * `/debate <proposal>` — Trigger a formal **Level-2 Multi-Agent Debate & Weighted Vote** with documented dissents\n\
+                    * `/debate <proposal>` — Trigger a live **Level-2 Multi-Agent Debate & Weighted Vote** across NIM models\n\
                     * `/spawn_temp <name>` — Spawn an isolated `temp_` specialist with 30m TTL under sponsor accountability\n\
                     * `/deploy <vX.Y.Z> <summary>` — Validate Constitution invariants and stage a versioned UI bundle (`@FORGE`)\n\
                     * `/rollback` — Instant atomic rollback to previous verified UI bundle (`@SENTINEL`)\n\
                     * `/backup` — Create an immediate SQLite WAL snapshot in `%APPDATA%\\Lushapps\\HIVE\\backups`\n\
-                    * `/pause` | `/resume` | `/mute` — Lifecycle and sensory sovereignty controls"
+                    * `/pause` | `/resume` — Lifecycle controls"
                         .to_string(),
                 )
             } else if lower == "/pause" {
@@ -161,27 +160,64 @@ impl AppState {
                     Err(e) => (
                         "ARCHIVIST".to_string(),
                         "Knowledge & Memory".to_string(),
-                        format!("⚠ **Backup Notice**: {}", e),
+                        format!("⚠ **Backup Error**: {}", e),
                     ),
                 }
             } else if lower.starts_with("/task ") {
-                let title = user_msg[6..].trim();
-                let steps = vec![
-                    ("Scope requirements & verify context", 5),
-                    ("Execute core implementation micro-step", 5),
-                    ("Run automated verification & save checkpoint", 5),
-                ];
-                let _ = daemon.create_demo_task(title, "CONDUCTOR", steps);
-                let _ = db.record_relationship("PRIME", "CONDUCTOR", "handed_off", 0.03, Some(title));
-                (
-                    "CONDUCTOR".to_string(),
-                    "Operations / Queue".to_string(),
-                    format!(
-                        "⬡ **5-Minute Action Chunk Created**: **{}**\n\n\
-                        Decomposed into 3 sequential ~5-minute micro-actions to prevent cognitive overload. Only the current actionable step is highlighted below with automatic checkpointing.",
-                        title
+                let title = user_msg[6..].trim().to_string();
+                let title_for_llm = title.clone();
+                let step_gen = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<String>> {
+                    let sys = "You are @CONDUCTOR, Operations & Queue lead of H.I.V.E. Decompose the user's goal into exactly 3 concrete ~5-minute micro-steps. Return ONLY 3 lines, one step per line, with no numbering or bullets.";
+                    let out = bridges::EcosystemBridges::call_nim_completion(
+                        "minimaxai/minimax-m3.1-flash",
+                        sys,
+                        &title_for_llm,
+                    )?;
+                    let parsed: Vec<String> = out
+                        .lines()
+                        .map(|l| l.trim().trim_start_matches(['-', '*', '1', '2', '3', '.', ')']).trim().to_string())
+                        .filter(|l| !l.is_empty())
+                        .take(3)
+                        .collect();
+                    if parsed.is_empty() {
+                        anyhow::bail!("No steps returned from NIM");
+                    }
+                    Ok(parsed)
+                })
+                .await;
+
+                match step_gen {
+                    Ok(Ok(steps_vec)) => {
+                        let step_refs: Vec<(&str, u32)> =
+                            steps_vec.iter().map(|s| (s.as_str(), 5u32)).collect();
+                        let _ = daemon.create_task_chunk(&title, "FORGE", step_refs);
+                        let _ = db.record_relationship("CONDUCTOR", "FORGE", "handed_off", 0.04, Some(&title));
+                        let formatted_steps = steps_vec
+                            .iter()
+                            .enumerate()
+                            .map(|(i, s)| format!("{}. `{}` (~5m)", i + 1, s))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        (
+                            "CONDUCTOR".to_string(),
+                            "Operations / Queue".to_string(),
+                            format!(
+                                "⬡ **5-Minute Action Chunk Created**: **{}**\n\n{}\n\nAssigned to `@FORGE` with automatic checkpointing.",
+                                title, formatted_steps
+                            ),
+                        )
+                    }
+                    Ok(Err(e)) => (
+                        "CONDUCTOR".to_string(),
+                        "Operations / Queue".to_string(),
+                        format!("⚠ **Task Decomposition Error**: {}", e),
                     ),
-                )
+                    Err(e) => (
+                        "CONDUCTOR".to_string(),
+                        "Operations / Queue".to_string(),
+                        format!("⚠ **Runtime Task Error**: {}", e),
+                    ),
+                }
             } else if lower.starts_with("/spawn_temp ") {
                 let name = user_msg[12..].trim();
                 match db.spawn_temp_specialist(name, "Ephemeral Task Specialist", "PRIME", 30) {
@@ -199,33 +235,48 @@ impl AppState {
                     Err(e) => ("PRIME".to_string(), "Command / Strategy".to_string(), format!("⚠ Spawn error: {}", e)),
                 }
             } else if lower.starts_with("/debate ") {
-                let topic = user_msg[8..].trim();
-                match governance.propose_decision(
-                    topic,
-                    "Formal Level-2 multi-agent architectural & operational evaluation",
-                    DecisionLevel::Significant,
-                    "PRIME",
-                ) {
-                    Ok(dec) => {
-                        let _ = db.record_relationship("FORGE", "GAUGE", "collaborated", 0.02, Some(topic));
-                        let _ = db.record_relationship("SPARK", "PRIME", "disagreed", 0.02, Some("Proposed alternative R&D vector during debate"));
+                let topic = user_msg[8..].trim().to_string();
+                let gov_clone = governance.clone();
+                let topic_clone = topic.clone();
+                let debate_res = tokio::task::spawn_blocking(move || {
+                    gov_clone.propose_decision(
+                        &topic_clone,
+                        "Formal Level-2 multi-agent architectural & operational evaluation",
+                        DecisionLevel::Significant,
+                        "PRIME",
+                    )
+                })
+                .await;
+
+                match debate_res {
+                    Ok(Ok(dec)) => {
+                        let mut vote_lines: Vec<String> = dec
+                            .votes
+                            .values()
+                            .map(|v| {
+                                let verdict = if v.approve { "APPROVE" } else { "DISSENT" };
+                                format!(
+                                    "* **@{}** *(Weight {:.1} — {})*: {}",
+                                    v.agent, v.weight, verdict, v.rationale
+                                )
+                            })
+                            .collect();
+                        vote_lines.sort();
                         (
                             "PRIME".to_string(),
                             "Command / Strategy".to_string(),
                             format!(
-                                "⬡ **Level-2 Governance Debate Concluded**: **{}**\n\n\
-                                * **PRIME [Command]**: Aligns with owner priorities and minimalist Borg architecture. *(Approve — Weight 1.5)*\n\
-                                * **FORGE [Engineering]**: Modular implementation verified with zero regressions. *(Approve — Weight 1.3)*\n\
-                                * **SENTINEL [Security]**: Permission boundaries and Constitution invariants preserved. *(Approve — Weight 1.5)*\n\
-                                * **SPARK [Innovation]**: *Dissenting Opinion* — Recommends evaluating a more experimental prototype branch in parallel. *(Dissent — Weight 1.1)*\n\n\
+                                "⬡ **Level-2 Governance Debate Concluded**: **{}**\n\n{}\n\n\
                                 **Resolution**: `{}` | **Recorded Dissents**: `{}`",
                                 dec.title,
+                                vote_lines.join("\n"),
                                 dec.status.to_uppercase(),
                                 dec.dissent_summary.unwrap_or_else(|| "None".to_string())
                             ),
                         )
                     }
-                    Err(e) => ("PRIME".to_string(), "Command / Strategy".to_string(), format!("⚠ Debate error: {}", e)),
+                    Ok(Err(e)) => ("PRIME".to_string(), "Command / Strategy".to_string(), format!("⚠ Debate error: {}", e)),
+                    Err(e) => ("PRIME".to_string(), "Command / Strategy".to_string(), format!("⚠ Debate join error: {}", e)),
                 }
             } else if lower.starts_with("/deploy ") {
                 let rest = user_msg[8..].trim();
@@ -400,37 +451,46 @@ impl AppState {
                 };
 
                 if let Some(agent) = target_agent {
+                    let recent_history = db
+                        .get_messages(channel_id, 8, None)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|m| format!("@{}: {}", m.sender, m.content))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
                     let sys_prompt = format!(
-                        "You are {} ({}), one of the 12 permanent agents of H.I.V.E., an autonomous desktop AI agency. \
-                        Your model tier is {}. Personality: {}. Be concise, technical, direct, and helpful.",
-                        agent.display_name,
+                        "You are @{} ({}), one of the 12 permanent agents of H.I.V.E., an autonomous desktop AI agency.\n\
+                        Your model tier is {}.\n\
+                        Personality & Style: {}\n\
+                        Skills: {}\n\
+                        Tools: {}\n\
+                        Recent Conversation History in this channel:\n{}\n\n\
+                        Respond directly, authentically, and concisely in markdown.",
+                        agent.codename,
                         agent.role,
                         agent.model_tier,
-                        agent.personality.as_deref().unwrap_or("precise, collaborative")
+                        agent.personality.as_deref().unwrap_or("precise, collaborative"),
+                        agent.skills.as_deref().unwrap_or("[]"),
+                        agent.tools.as_deref().unwrap_or("[]"),
+                        recent_history
                     );
 
-                    // Try live NIM model tier completion first; fallback to deterministic specialist response
-                    let response_text = match bridges::EcosystemBridges::call_nim_completion(
-                        &agent.model_tier,
-                        &sys_prompt,
-                        &user_msg,
-                    ) {
-                        Ok(live_reply) => live_reply,
-                        Err(_) => match agent.codename.as_str() {
-                            "PRIME" => format!("⬡ **Strategic Assessment** (`{}`)\n\nDirective logged: *\"{}\"*. Coordinating with `@CONDUCTOR` for 5-minute action chunking and `@SENTINEL` for boundary verification. Use `/task <title>` to spawn a tracked checklist or `/debate <topic>` for a Level-2 agency vote.", agent.model_tier, user_msg),
-                            "SAGE" => format!("⬡ **Research Synthesis** (`{}`)\n\nAnalyzing query: *\"{}\"*. Cross-referencing shared agency memory and Obsidian knowledge graph. Key findings will be tagged with provenance and confidence scores.", agent.model_tier, user_msg),
-                            "FORGE" => format!("⬡ **Engineering Pipeline** (`{}`)\n\nEvaluating implementation for: *\"{}\"*. All changes will run through isolated version directories (`versions/vX.Y.Z`) and the Application Constitution AST validator before promotion.", agent.model_tier, user_msg),
-                            "SENTINEL" => format!("⬡ **Security & Audit** (`{}`)\n\nAudited request: *\"{}\"*. Credential isolation, CLI allowlists, and Constitutional invariants remain 100% intact.", agent.model_tier, user_msg),
-                            "VOICE" => format!("⬡ **Communications** (`{}`)\n\nPrepared concise stakeholder summary for: *\"{}\"*. Audio remains strictly muted by default per constitutional sovereignty.", agent.model_tier, user_msg),
-                            "ARCHIVIST" => format!("⬡ **Memory & Knowledge Index** (`{}`)\n\nIndexed context for: *\"{}\"*. Stored with full provenance tracking. Use `/obsidian Title | Content` to persist a permanent vault note.", agent.model_tier, user_msg),
-                            "CONDUCTOR" => format!("⬡ **Operations & Queue** (`{}`)\n\nReady to decompose *\"{}\"* into ~5-minute micro-actions with saved resume checkpoints. Use `/task {}` to activate.", agent.model_tier, user_msg, user_msg),
-                            "VISION" => format!("⬡ **Design & Accessibility** (`{}`)\n\nReviewed *\"{}\"* against Minimalist Borg tokens (`#0B0F14` base, `#121820` panel, `#42CFC4` cyan, `#85D94B` lime) and WCAG 2.1 AA contrast.", agent.model_tier, user_msg),
-                            "LEDGER" => format!("⬡ **Resource & Budget Ledger** (`{}`)\n\nEvaluated cost footprint for: *\"{}\"*. Zero unauthorized financial commitments; 48-hour purchase cooling-off policy enforced.", agent.model_tier, user_msg),
-                            "LINK" => format!("⬡ **Ecosystem Integration** (`{}`)\n\nBridges ready for *\"{}\"* (`gog` CLI, `Obsidian.com`, `browser-relay`, `kokoro`). Use `/gog <cmd>` or `/browser status` to execute live.", agent.model_tier, user_msg),
-                            "GAUGE" => format!("⬡ **Verification & Quality** (`{}`)\n\nTest harness standing by for: *\"{}\"*. All Rust core tests and Constitution invariant checks are passing.", agent.model_tier, user_msg),
-                            "SPARK" => format!("⬡ **R&D & Experiments** (`{}`)\n\nExploring novel approaches for: *\"{}\"*. Ready to prototype in an isolated preview sandbox (`H.I.V.E. Preview`).", agent.model_tier, user_msg),
-                            _ => format!("Acknowledged: *\"{}\"*. Proceeding with specialized execution.", user_msg),
-                        },
+                    let model_tier_clone = agent.model_tier.clone();
+                    let user_msg_clone = user_msg.clone();
+                    let llm_res = tokio::task::spawn_blocking(move || {
+                        bridges::EcosystemBridges::call_nim_completion(
+                            &model_tier_clone,
+                            &sys_prompt,
+                            &user_msg_clone,
+                        )
+                    })
+                    .await;
+
+                    let response_text = match llm_res {
+                        Ok(Ok(live_reply)) => live_reply,
+                        Ok(Err(err)) => format!("⚠ **NIM Model Tier Error (`{}`)**: {}", agent.model_tier, err),
+                        Err(err) => format!("⚠ **Runtime Task Join Error**: {}", err),
                     };
 
                     (agent.codename, agent.role, response_text)
@@ -438,7 +498,7 @@ impl AppState {
                     (
                         "PRIME".to_string(),
                         "Command / Strategy".to_string(),
-                        "Directive received. Ready to assist.".to_string(),
+                        "⚠ Target agent not found in SQLite registry.".to_string(),
                     )
                 }
             };
