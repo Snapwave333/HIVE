@@ -6,6 +6,38 @@ import remarkGfm from "remark-gfm";
 import { TaskCard } from "./TaskCard";
 import { M3Icon } from "./M3Icon";
 
+const CodeBlock: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(preRef.current?.textContent ?? "");
+      setCopied("done");
+    } catch {
+      setCopied("failed");
+    }
+    setTimeout(() => setCopied("idle"), 1500);
+  };
+  return (
+    <div className="relative group/code my-2.5">
+      <pre
+        ref={preRef}
+        className="bg-hive-base p-3 pr-16 rounded-xl border border-hive-border text-[11.5px] font-mono overflow-x-auto text-hive-lime"
+      >
+        {children}
+      </pre>
+      <button
+        onClick={copy}
+        className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-hive-surface border border-hive-border text-[10px] text-hive-dimText hover:text-hive-brightText opacity-0 group-hover/code:opacity-100 focus-visible:opacity-100 transition-opacity flex items-center gap-1"
+        aria-label="Copy code"
+      >
+        <M3Icon name={copied === "done" ? "check" : "content_copy"} size={12} />
+        {copied === "done" ? "Copied" : copied === "failed" ? "Copy failed" : "Copy"}
+      </button>
+    </div>
+  );
+};
+
 const markdownComponents: Components = {
   p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
   code: ({ children }) => (
@@ -13,11 +45,7 @@ const markdownComponents: Components = {
       {children}
     </code>
   ),
-  pre: ({ children }) => (
-    <pre className="bg-hive-base p-3 rounded-xl border border-hive-border text-[11.5px] font-mono overflow-x-auto my-2.5 text-hive-lime">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   ul: ({ children }) => <ul className="list-disc ml-5 my-1.5 space-y-1">{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal ml-5 my-1.5 space-y-1">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,

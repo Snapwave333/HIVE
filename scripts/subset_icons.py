@@ -18,7 +18,7 @@ ICON_TAG = re.compile(r"<M3Icon\b(.*?)/>", re.S)
 NAME_LITERAL = re.compile(r'\bname="([a-z0-9_]+)"')
 NAME_EXPR = re.compile(r"\bname=\{(.*?)\}", re.S)
 ICON_PROP = re.compile(r'\bicon:\s*"([a-z0-9_]+)"')
-STRING = re.compile(r'"([a-z0-9_]+)"')
+STRING = re.compile(r'(?:^\s*|[?:]\s*)"([a-z0-9_]+)"')
 
 
 def used_icon_names(src_dir: Path) -> list[str]:

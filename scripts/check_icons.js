@@ -9,7 +9,7 @@ const iconTag = /<M3Icon\b([\s\S]*?)\/>/g;
 const nameLiteral = /\bname="([a-z0-9_]+)"/g;
 const nameExpr = /\bname=\{([\s\S]*?)\}/g;
 const iconProp = /\bicon:\s*"([a-z0-9_]+)"/g;
-const stringLit = /"([a-z0-9_]+)"/g;
+const resultLit = /(?:^\s*|[?:]\s*)"([a-z0-9_]+)"/g;
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -25,7 +25,7 @@ for (const file of walk(path.join(root, "src"))) {
   const text = fs.readFileSync(file, "utf-8");
   for (const [, tag] of text.matchAll(iconTag)) {
     for (const [, n] of tag.matchAll(nameLiteral)) used.add(n);
-    for (const [, expr] of tag.matchAll(nameExpr)) for (const [, n] of expr.matchAll(stringLit)) used.add(n);
+    for (const [, expr] of tag.matchAll(nameExpr)) for (const [, n] of expr.matchAll(resultLit)) used.add(n);
   }
   for (const [, n] of text.matchAll(iconProp)) used.add(n);
 }
