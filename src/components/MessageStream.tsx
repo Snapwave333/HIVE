@@ -406,13 +406,12 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               >
                 {!isUser && (
                   <button
-                    onClick={() => onPlayVoice(msg.content, msg.sender)}
-                    className="hover:text-hive-lime transition-colors flex items-center gap-1"
-                    title={
-                      isMuted
-                        ? "Strict Mute Active: Unmute in header to play speech"
-                        : "Listen (Local TTS)"
-                    }
+                    onClick={() => !isMuted && onPlayVoice(msg.content, msg.sender)}
+                    aria-disabled={isMuted}
+                    className={`transition-colors flex items-center gap-1 ${
+                      isMuted ? "opacity-60 cursor-not-allowed" : "hover:text-hive-lime"
+                    }`}
+                    title={isMuted ? "Speech is muted. Unmute with the speaker button to listen." : "Listen to this message"}
                   >
                     <M3Icon name="record_voice_over" size={13} />
                     <span>TTS</span>
