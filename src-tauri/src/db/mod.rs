@@ -115,6 +115,14 @@ impl Database {
         Ok(())
     }
 
+    pub fn attachments_dir(&self) -> PathBuf {
+        if self.db_path.as_os_str() == ":memory:" {
+            std::env::temp_dir().join(format!("hive-attachments-{}", std::process::id()))
+        } else {
+            Self::app_root_dir().join("attachments")
+        }
+    }
+
     pub fn create_backup(&self) -> Result<PathBuf> {
         if self.db_path.as_os_str() == ":memory:" {
             anyhow::bail!("Cannot backup in-memory database to disk");
@@ -730,7 +738,7 @@ impl Database {
             .and_then(|e| e.to_str())
             .unwrap_or("bin");
 
-        let attach_dir = Self::app_root_dir().join("attachments");
+        let attach_dir = self.attachments_dir();
         std::fs::create_dir_all(&attach_dir)?;
         let file_path = attach_dir.join(format!("{}.{}", hash, ext));
         if !file_path.exists() {

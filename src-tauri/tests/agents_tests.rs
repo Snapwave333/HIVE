@@ -498,3 +498,14 @@ fn backup_retention_keeps_the_newest_dated_files_only() {
     assert!(Database::prune_backups(&dir, 14).unwrap().is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn test_databases_never_write_into_the_real_attachments_folder() {
+    use base64::Engine;
+    let db = Database::new_in_memory().unwrap();
+    let meta = db
+        .save_attachment("probe.txt", "text/plain", &base64::engine::general_purpose::STANDARD.encode("probe"))
+        .unwrap();
+    assert!(meta.file_path.starts_with(std::env::temp_dir().to_string_lossy().as_ref()));
+    assert!(!meta.file_path.starts_with(Database::app_root_dir().to_string_lossy().as_ref()));
+}
