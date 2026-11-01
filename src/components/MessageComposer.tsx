@@ -11,6 +11,24 @@ interface MessageComposerProps {
   onToggleMute: () => void;
   channelLabel: string;
   agents: { codename: string; role: string; display_name: string }[];
+  draftKey: number;
+}
+
+const DRAFTS_KEY = "hive.drafts";
+
+function loadDrafts(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFTS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveDraft(key: number, text: string) {
+  const drafts = loadDrafts();
+  if (text.trim()) drafts[key] = text;
+  else delete drafts[key];
+  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
 }
 
 const MAX_ATTACHMENTS = 6;
@@ -63,8 +81,24 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   onToggleMute,
   channelLabel,
   agents,
+  draftKey,
 }) => {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => loadDrafts()[draftKey] ?? "");
+  const draftKeyRef = useRef(draftKey);
+  const textRef = useRef(text);
+  textRef.current = text;
+
+  useEffect(() => {
+    if (draftKeyRef.current === draftKey) return;
+    saveDraft(draftKeyRef.current, textRef.current);
+    draftKeyRef.current = draftKey;
+    setText(loadDrafts()[draftKey] ?? "");
+  }, [draftKey]);
+
+  useEffect(() => {
+    const t = setTimeout(() => saveDraft(draftKeyRef.current, text), 400);
+    return () => clearTimeout(t);
+  }, [text]);
   const [showEmojis, setShowEmojis] = useState(false);
   const [showKaomoji, setShowKaomoji] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentRecord[]>([]);
@@ -214,6 +248,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         : undefined;
     onSendMessage(text.trim(), replyingTo?.id, attachmentsJson);
     setText("");
+    saveDraft(draftKey, "");
     setAttachments([]);
     setUploadError(null);
     setShowEmojis(false);

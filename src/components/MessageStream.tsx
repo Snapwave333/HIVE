@@ -282,7 +282,9 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
           </button>
         </div>
       )}
-      {messages.map((msg) => {
+      {messages.map((msg, idx) => {
+        const day = dayKey(msg.created_at);
+        const showDay = idx === 0 || day !== dayKey(messages[idx - 1].created_at);
         const isUser = msg.sender === "user";
         const agent = !isUser ? getAgent(msg.sender) : undefined;
         const repliedMsg = msg.reply_to_id
@@ -301,8 +303,15 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
         const associatedTask = tasks.find((t) => msg.content.includes(t.title));
 
         return (
+          <React.Fragment key={msg.id}>
+          {showDay && (
+            <div className="flex justify-center my-1 select-none" role="separator" aria-label={dayLabel(msg.created_at)}>
+              <span className="px-3 py-0.5 rounded-full bg-hive-surface border border-hive-border text-[11px] text-hive-dimText">
+                {dayLabel(msg.created_at)}
+              </span>
+            </div>
+          )}
           <div
-            key={msg.id}
             id={`msg-${msg.id}`}
             className={`flex flex-col group rounded-2xl transition-shadow ${isUser ? "items-end" : "items-start"} ${
               highlightMessageId === msg.id ? "ring-2 ring-hive-lime/60 ring-offset-4 ring-offset-hive-base" : ""
@@ -516,6 +525,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
               </div>
             </div>
           </div>
+          </React.Fragment>
         );
       })}
 
@@ -533,6 +543,27 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
     </div>
   );
 };
+
+function dayKey(isoString: string): string {
+  const d = new Date(isoString);
+  return Number.isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(isoString: string): string {
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (dayKey(isoString) === dayKey(today.toISOString())) return "Today";
+  if (dayKey(isoString) === dayKey(yesterday.toISOString())) return "Yesterday";
+  return d.toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}),
+  });
+}
 
 function formatTime(isoString: string): string {
   try {
