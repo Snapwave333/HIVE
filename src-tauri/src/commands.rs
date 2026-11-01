@@ -4,7 +4,7 @@ use crate::db::models::{
     Agent, AttachmentMeta, AuditEntry, Channel, MemoryItem, Message, RelationshipEdge, TaskChunk,
     TempSpecialist, UiDeployment,
 };
-use crate::deployment::{ConstitutionReport, DeploymentEngine};
+use crate::deployment::{is_safe_version, ConstitutionReport, DeploymentEngine};
 use crate::governance::{Decision, DecisionLevel};
 use crate::AppState;
 use chrono::Utc;
@@ -12,28 +12,28 @@ use serde_json::Value;
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_channels(state: State<'_, AppState>) -> Result<Vec<Channel>, String> {
     state.db.get_channels().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agents(state: State<'_, AppState>) -> Result<Vec<Agent>, String> {
     state.db.get_agents().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_relationships(state: State<'_, AppState>) -> Result<Vec<RelationshipEdge>, String> {
     state.db.get_relationships().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_temp_specialists(state: State<'_, AppState>) -> Result<Vec<TempSpecialist>, String> {
     let _ = state.db.retire_expired_specialists();
     state.db.get_temp_specialists().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn spawn_temp_specialist(
     name: String,
     role: String,
@@ -54,7 +54,7 @@ pub fn spawn_temp_specialist(
     Ok(spec)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_messages(
     channel_id: i64,
     limit: Option<i64>,
@@ -67,7 +67,7 @@ pub fn get_messages(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn send_message(
     channel_id: i64,
     content: String,
@@ -76,6 +76,9 @@ pub fn send_message(
     thread_root_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Message, String> {
+    if content.trim().is_empty() && attachments.as_deref().map(str::trim).unwrap_or("").is_empty() {
+        return Err("Message is empty".to_string());
+    }
     let now = Utc::now().to_rfc3339();
     let msg_id = Uuid::new_v4().to_string();
 
@@ -97,15 +100,13 @@ pub fn send_message(
     };
 
     state.db.insert_message(&msg).map_err(|e| e.to_string())?;
-    state.events.emit_message(&msg_id, channel_id, "user", &content);
-
-    // Trigger agent or slash-command response
+    state.events.emit_stored_message(&msg);
     state.trigger_agent_reply(channel_id, &content);
 
     Ok(msg)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn edit_message(
     message_id: String,
     content: String,
@@ -117,12 +118,12 @@ pub fn edit_message(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_message(message_id: String, state: State<'_, AppState>) -> Result<(), String> {
     state.db.delete_message(&message_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn toggle_reaction(
     message_id: String,
     emoji: String,
@@ -135,7 +136,7 @@ pub fn toggle_reaction(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn forward_message(
     message_id: String,
     target_channel_id: i64,
@@ -145,13 +146,11 @@ pub fn forward_message(
         .db
         .forward_message(&message_id, target_channel_id)
         .map_err(|e| e.to_string())?;
-    state
-        .events
-        .emit_message(&fwd.id, target_channel_id, "user", &fwd.content);
+    state.events.emit_stored_message(&fwd);
     Ok(fwd)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn upload_attachment(
     filename: String,
     mime_type: String,
@@ -164,7 +163,7 @@ pub fn upload_attachment(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_tasks(
     status_filter: Option<String>,
     state: State<'_, AppState>,
@@ -175,7 +174,7 @@ pub fn get_tasks(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn create_task(
     title: String,
     assignee: String,
@@ -189,7 +188,7 @@ pub fn create_task(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_task_step(
     task_id: String,
     step_index: usize,
@@ -203,7 +202,7 @@ pub fn update_task_step(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_memories(
     category: Option<String>,
     state: State<'_, AppState>,
@@ -214,7 +213,7 @@ pub fn get_memories(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn add_memory(
     category: String,
     content: String,
@@ -238,7 +237,7 @@ pub fn add_memory(
     Ok(mem_id)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_memory(
     id: String,
     content: String,
@@ -251,28 +250,34 @@ pub fn update_memory(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_memory(id: String, state: State<'_, AppState>) -> Result<(), String> {
     state.db.delete_memory(&id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn search_unified(query: String, state: State<'_, AppState>) -> Result<Value, String> {
     state.db.search(&query).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn get_bridge_status() -> Result<BridgeStatus, String> {
-    Ok(EcosystemBridges::get_status())
+#[tauri::command(rename_all = "snake_case")]
+pub async fn get_bridge_status() -> Result<BridgeStatus, String> {
+    tokio::task::spawn_blocking(EcosystemBridges::get_status)
+        .await
+        .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn execute_google_query(service: String, args: Vec<String>) -> Result<String, String> {
-    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    EcosystemBridges::gog_query(&service, &arg_refs).map_err(|e| e.to_string())
+#[tauri::command(rename_all = "snake_case")]
+pub async fn execute_google_query(service: String, args: Vec<String>) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        EcosystemBridges::gog_query(&service, &arg_refs).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn write_obsidian_note(
     title: String,
     content: String,
@@ -283,18 +288,26 @@ pub fn write_obsidian_note(
     Ok(path.to_string_lossy().to_string())
 }
 
-#[tauri::command]
-pub fn search_obsidian_notes(query: String) -> Result<Vec<Value>, String> {
-    EcosystemBridges::search_obsidian_notes(&query).map_err(|e| e.to_string())
+#[tauri::command(rename_all = "snake_case")]
+pub async fn search_obsidian_notes(query: String) -> Result<Vec<Value>, String> {
+    tokio::task::spawn_blocking(move || {
+        EcosystemBridges::search_obsidian_notes(&query).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
-pub fn synthesize_voice(text: String, agent_codename: String) -> Result<String, String> {
-    EcosystemBridges::synthesize_speech_data_url(&text, &agent_codename)
-        .map_err(|e| e.to_string())
+#[tauri::command(rename_all = "snake_case")]
+pub async fn synthesize_voice(text: String, agent_codename: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        EcosystemBridges::synthesize_speech_data_url(&text, &agent_codename)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agency_state(state: State<'_, AppState>) -> Result<String, String> {
     let s = match state.daemon.state() {
         AgencyState::Running => "running",
@@ -304,7 +317,7 @@ pub fn get_agency_state(state: State<'_, AppState>) -> Result<String, String> {
     Ok(s.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn set_agency_state(state_name: String, state: State<'_, AppState>) -> Result<(), String> {
     match state_name.as_str() {
         "running" => state.daemon.resume(),
@@ -315,7 +328,7 @@ pub fn set_agency_state(state_name: String, state: State<'_, AppState>) -> Resul
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.hide().map_err(|e| e.to_string())?;
@@ -323,36 +336,36 @@ pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn stop_agency_and_quit(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     state.daemon.stop();
     app.exit(0);
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_audio_mute_state(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.is_audio_muted())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn set_audio_mute_state(is_muted: bool, state: State<'_, AppState>) -> Result<(), String> {
     state.set_audio_muted(is_muted);
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_setting(key: String, state: State<'_, AppState>) -> Result<Option<String>, String> {
     state.db.get_setting(&key).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn set_setting(key: String, value: String, state: State<'_, AppState>) -> Result<(), String> {
     state.db.set_setting(&key, &value).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn propose_governance_decision(
+#[tauri::command(rename_all = "snake_case")]
+pub async fn propose_governance_decision(
     title: String,
     description: String,
     level: u8,
@@ -365,13 +378,17 @@ pub fn propose_governance_decision(
         3 => DecisionLevel::OwnerControlled,
         _ => return Err("Invalid decision level".to_string()),
     };
-    state
-        .governance
-        .propose_decision(&title, &description, lvl, &proposer)
-        .map_err(|e| e.to_string())
+    let governance = state.governance.clone();
+    tokio::task::spawn_blocking(move || {
+        governance
+            .propose_decision(&title, &description, lvl, &proposer)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn authorize_governance_decision(
     decision_id: String,
     approve: bool,
@@ -383,37 +400,41 @@ pub fn authorize_governance_decision(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_constitution() -> Result<Value, String> {
     let const_str = include_str!("../../app/constitution.json");
     serde_json::from_str(const_str).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn validate_constitution_invariants(candidate_source: String) -> Result<ConstitutionReport, String> {
     Ok(DeploymentEngine::validate_constitution(&candidate_source))
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_ui_deployments(state: State<'_, AppState>) -> Result<Vec<UiDeployment>, String> {
     state.db.get_ui_deployments().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn deploy_ui_version(
+#[tauri::command(rename_all = "snake_case")]
+pub async fn deploy_ui_version(
     version: String,
     author_agent: String,
     summary: String,
     activate: bool,
     state: State<'_, AppState>,
 ) -> Result<UiDeployment, String> {
-    state
-        .deployment
-        .stage_and_deploy_version(&version, &author_agent, &summary, activate)
-        .map_err(|e| e.to_string())
+    let engine = state.deployment.clone();
+    tokio::task::spawn_blocking(move || {
+        engine
+            .stage_and_deploy_version(&version, &author_agent, &summary, activate)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn rollback_ui_version(
     reason: String,
     state: State<'_, AppState>,
@@ -421,14 +442,23 @@ pub fn rollback_ui_version(
     state.deployment.rollback(&reason).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn open_preview_window(app: AppHandle, version: String) -> Result<(), String> {
+#[tauri::command(rename_all = "snake_case")]
+pub fn open_preview_window(
+    app: AppHandle,
+    version: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let target = if is_safe_version(&version)
+        && state.deployment.bundle_dir(&version).join("index.html").is_file()
+    {
+        format!("__preview/{}/index.html?preview=1", version)
+    } else {
+        "index.html?preview=1".to_string()
+    };
     if let Some(existing) = app.get_webview_window("preview") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
-        return Ok(());
+        let _ = existing.close();
     }
-    WebviewWindowBuilder::new(&app, "preview", WebviewUrl::App("index.html?preview=1".into()))
+    WebviewWindowBuilder::new(&app, "preview", WebviewUrl::App(target.into()))
         .title(format!("H.I.V.E. Isolated Preview Sandbox — {}", version))
         .inner_size(1020.0, 700.0)
         .center()
@@ -437,7 +467,7 @@ pub fn open_preview_window(app: AppHandle, version: String) -> Result<(), String
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_audit_log(limit: Option<i64>, state: State<'_, AppState>) -> Result<Vec<AuditEntry>, String> {
     state
         .db
@@ -445,7 +475,7 @@ pub fn get_audit_log(limit: Option<i64>, state: State<'_, AppState>) -> Result<V
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn create_db_backup(state: State<'_, AppState>) -> Result<String, String> {
     let path = state.db.create_backup().map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())

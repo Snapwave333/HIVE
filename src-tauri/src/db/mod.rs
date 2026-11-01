@@ -59,7 +59,9 @@ impl Database {
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA foreign_keys = ON;
-             PRAGMA synchronous = NORMAL;",
+             PRAGMA synchronous = NORMAL;
+             PRAGMA busy_timeout = 5000;
+             PRAGMA temp_store = MEMORY;",
         )?;
 
         let db = Self {
@@ -68,11 +70,11 @@ impl Database {
         };
 
         db.init_schema()?;
+        db.apply_migrations()?;
         db.seed_defaults()?;
 
-        // Create automatic daily snapshot if not in-memory
-        if db.db_path != PathBuf::from(":memory:") {
-            let _ = db.create_backup();
+        if let Err(e) = db.create_backup() {
+            log::warn!("Daily backup failed: {}", e);
         }
 
         Ok(db)
@@ -91,6 +93,7 @@ impl Database {
         };
 
         db.init_schema()?;
+        db.apply_migrations()?;
         db.seed_defaults()?;
 
         Ok(db)
@@ -109,7 +112,7 @@ impl Database {
     }
 
     pub fn create_backup(&self) -> Result<PathBuf> {
-        if self.db_path == PathBuf::from(":memory:") {
+        if self.db_path.as_os_str() == ":memory:" {
             anyhow::bail!("Cannot backup in-memory database to disk");
         }
         let backup_dir = Self::app_root_dir().join("backups");
@@ -120,7 +123,11 @@ impl Database {
         if !backup_file.exists() {
             let conn = self.conn.lock().unwrap();
             let escaped = backup_file.to_string_lossy().replace('\'', "''");
-            let _ = conn.execute_batch(&format!("VACUUM INTO '{}';", escaped));
+            conn.execute_batch(&format!("VACUUM INTO '{}';", escaped))
+                .with_context(|| format!("VACUUM INTO {:?} failed", backup_file))?;
+        }
+        if std::fs::metadata(&backup_file).map(|m| m.len()).unwrap_or(0) == 0 {
+            anyhow::bail!("Backup file {:?} is missing or empty", backup_file);
         }
         Ok(backup_file)
     }
@@ -160,10 +167,15 @@ impl Database {
                 "INSERT INTO agents (codename, display_name, role, model_tier, status, avatar_config, personality, skills, tools, permissions, updated_at)
                  VALUES (?1, ?2, ?3, ?4, 'available', ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(codename) DO UPDATE SET
-                    personality = COALESCE(agents.personality, excluded.personality),
-                    skills = COALESCE(agents.skills, excluded.skills),
-                    tools = COALESCE(agents.tools, excluded.tools),
-                    permissions = COALESCE(agents.permissions, excluded.permissions)",
+                    display_name = excluded.display_name,
+                    role = excluded.role,
+                    model_tier = excluded.model_tier,
+                    avatar_config = excluded.avatar_config,
+                    personality = COALESCE(excluded.personality, agents.personality),
+                    skills = COALESCE(excluded.skills, agents.skills),
+                    tools = COALESCE(excluded.tools, agents.tools),
+                    permissions = COALESCE(excluded.permissions, agents.permissions),
+                    status = 'available'",
                 params![
                     codename,
                     display,
@@ -202,79 +214,30 @@ impl Database {
             }
         }
 
-        // 3. Seed Initial Inter-Agent Relationship Graph
-        let rel_count: i64 = conn.query_row("SELECT COUNT(*) FROM relationships", [], |r| r.get(0))?;
-        if rel_count == 0 {
-            let initial_edges = vec![
-                ("PRIME", "CONDUCTOR", "handed_off", 0.92, "Strategic sprint decomposition into 5-minute action chunks"),
-                ("FORGE", "GAUGE", "collaborated", 0.96, "Continuous build & regression verification pipeline"),
-                ("SAGE", "ARCHIVIST", "collaborated", 0.89, "Research synthesis indexed into Obsidian knowledge graph"),
-                ("VISION", "FORGE", "collaborated", 0.91, "Minimalist Borg design token implementation"),
-                ("SENTINEL", "LINK", "collaborated", 0.94, "CLI bridge allowlist & credential isolation audit"),
-                ("SPARK", "PRIME", "disagreed", 0.78, "Debated experimental feature velocity vs stability window; resolved via preview sandbox"),
-                ("PRIME", "SPARK", "mentored", 0.85, "Guided R&D prototype alignment with Application Constitution"),
-            ];
-            for (src, dst, kind, w, note) in initial_edges {
-                conn.execute(
-                    "INSERT OR IGNORE INTO relationships (source_agent, target_agent, edge_type, weight, notes, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    params![src, dst, kind, w, note, now],
-                )?;
-            }
-        }
-
-        // 4. Seed Initial 4-Tier Memories if empty
         let mem_count: i64 = conn.query_row("SELECT COUNT(*) FROM memories", [], |r| r.get(0))?;
         if mem_count == 0 {
-            let seed_memories = vec![
-                ("shared", "Application Constitution v1.0.0 is locked: 1 #agency-hq + 12 permanent agent DMs, audio 100% muted by default, ADHD 5-minute task chunking.", "constitution.json", 1.0, false, "constitution,invariant"),
-                ("operational", "Google CLI bridge (gog.bat) verified for account elikenny333@gmail.com with Drive, Calendar, Gmail, and Tasks scopes.", "LINK_audit", 1.0, false, "google,gog,bridge"),
-                ("relationship", "FORGE and GAUGE established a mandatory pre-deployment verification handshake on all UI bundles.", "agency_retrospective", 0.95, false, "forge,gauge,workflow"),
-                ("individual", "VISION notes: Maintain strict 1px hairline borders (#212E3D) and matte graphite surfaces (#0B0F14 / #121820) for zero visual fatigue.", "VISION_journal", 0.95, false, "design,borg,accessibility"),
-            ];
-            for (cat, content, prov, conf, spec, tags) in seed_memories {
-                conn.execute(
-                    "INSERT INTO memories (id, category, content, provenance, confidence, is_speculation, tags, created_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                    params![Uuid::new_v4().to_string(), cat, content, prov, conf, spec, tags, now],
-                )?;
+            if let Ok(constitution) = serde_json::from_str::<serde_json::Value>(include_str!("../../../app/constitution.json")) {
+                let version = constitution["version"].as_str().unwrap_or("1.0.0");
+                if let Some(invariants) = constitution["invariants"].as_object() {
+                    for (key, val) in invariants {
+                        let rule = val["rule"].as_str().unwrap_or_default();
+                        conn.execute(
+                            "INSERT INTO memories (id, category, content, provenance, confidence, is_speculation, tags, created_at)
+                             VALUES (?1, 'shared', ?2, ?3, 1.0, 0, ?4, ?5)",
+                            params![
+                                Uuid::new_v4().to_string(),
+                                format!("Constitution v{} ({}): {}", version, key.replace('_', " "), rule),
+                                format!("constitution.json#{}", key),
+                                format!("[\"constitution\",\"{}\"]", key),
+                                now
+                            ],
+                        )?;
+                    }
+                }
             }
         }
 
-        // 5. Seed Initial 5-Minute Task Chunk if empty
-        let task_count: i64 = conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
-        if task_count == 0 {
-            let initial_steps = serde_json::to_string(&vec![
-                TaskStep {
-                    index: 0,
-                    title: "Verify SQLite WAL & 12 Permanent Agent Schemas".to_string(),
-                    estimated_minutes: 5,
-                    completed: true,
-                    completed_at: Some(now.clone()),
-                },
-                TaskStep {
-                    index: 1,
-                    title: "Synchronize Google Calendar & Drive via gog CLI".to_string(),
-                    estimated_minutes: 5,
-                    completed: false,
-                    completed_at: None,
-                },
-                TaskStep {
-                    index: 2,
-                    title: "Audit Application Constitution Invariants".to_string(),
-                    estimated_minutes: 5,
-                    completed: false,
-                    completed_at: None,
-                },
-            ])?;
-            conn.execute(
-                "INSERT INTO tasks (id, title, description, assignee, priority, status, steps, current_step_index, resume_checkpoint, created_at, updated_at)
-                 VALUES (?1, 'Agency Boot & Ecosystem Synchronization', 'ADHD-friendly 5-minute micro-step checklist', 'CONDUCTOR', 'high', 'active', ?2, 1, 'Step 1/3 verified clean; ready for gog sync', ?3, ?3)",
-                params![Uuid::new_v4().to_string(), initial_steps, now],
-            )?;
-        }
 
-        // 6. Seed welcome message in #agency-hq if empty
         let msg_count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM messages WHERE channel_id = 0",
             [],
@@ -288,13 +251,12 @@ impl Database {
                  VALUES (?1, 0, 'PRIME', 'Command / Strategy', ?2, 1, ?3, ?3)",
                 params![
                     welcome_id,
-                    "⬡ **H.I.V.E. Agency Online** — **Agency Boot & Ecosystem Synchronization**\n\nAll 12 permanent agents are initialized and synchronized. The agency operates 24/7 across `#agency-hq` and 12 dedicated agent direct lines.\n\n* **PRIME**: Standing by for command directives and strategic planning.\n* **FORGE & GAUGE**: Engineering and verification pipelines active.\n* **SENTINEL**: Threat modeling and permission sandbox locked.\n* **LINK**: Connected to `gog` CLI (`elikenny333@gmail.com`), Obsidian, and OpenCode Relay.\n\nType `/help`, `/gog <cmd>`, `/debate <topic>`, `/task <title>`, or `@agent` to coordinate.",
+                    "Hey, welcome to #agency-hq. This is the group chat for all 12 of us. Tag anyone with @NAME, DM us from the sidebar, or type `/help` to see the slash commands. Tool status (Google, Obsidian, the model provider) lives in Settings, and we'll tell you straight if something isn't connected.",
                     now
                 ],
             )?;
         }
 
-        // 7. Seed default settings
         let settings = vec![
             ("audio_muted", "true"),
             ("agency_state", "running"),
@@ -315,6 +277,40 @@ impl Database {
             )?;
         }
 
+        Ok(())
+    }
+
+    fn apply_migrations(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let applied: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = 2",
+            [],
+            |r| r.get(0),
+        )?;
+        if applied > 0 {
+            return Ok(());
+        }
+        let now = Utc::now().to_rfc3339();
+        conn.execute_batch(
+            "DELETE FROM memories WHERE provenance IN ('LINK_audit', 'agency_retrospective', 'VISION_journal');
+             DELETE FROM relationships WHERE notes IN (
+                'Strategic sprint decomposition into 5-minute action chunks',
+                'Continuous build & regression verification pipeline',
+                'Research synthesis indexed into Obsidian knowledge graph',
+                'Minimalist Borg design token implementation',
+                'CLI bridge allowlist & credential isolation audit',
+                'Debated experimental feature velocity vs stability window; resolved via preview sandbox',
+                'Guided R&D prototype alignment with Application Constitution'
+             );
+             UPDATE tasks SET status = 'failed', resume_checkpoint = 'Retired: this task was seeded with a pre-checked step that never actually ran'
+              WHERE title = 'Agency Boot & Ecosystem Synchronization' AND status = 'active';
+             UPDATE ui_deployments SET is_active = 0, verification_log = 'Retired: legacy manifest-only record with no real bundle snapshot'
+              WHERE sha256_hash = 'baseline' OR directory_path NOT LIKE '%bundle';",
+        )?;
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (2, 'V2__retire_fabricated_seed_data', ?1)",
+            params![now],
+        )?;
         Ok(())
     }
 
@@ -375,6 +371,49 @@ impl Database {
             agents.push(r?);
         }
         Ok(agents)
+    }
+
+    fn map_agent(row: &rusqlite::Row) -> rusqlite::Result<Agent> {
+        Ok(Agent {
+            codename: row.get(0)?,
+            display_name: row.get(1)?,
+            role: row.get(2)?,
+            model_tier: row.get(3)?,
+            status: row.get(4)?,
+            avatar_config: row.get(5)?,
+            personality: row.get(6)?,
+            skills: row.get(7)?,
+            tools: row.get(8)?,
+            permissions: row.get(9)?,
+            updated_at: row.get(10)?,
+        })
+    }
+
+    pub fn get_agent(&self, codename: &str) -> Result<Option<Agent>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT codename, display_name, role, model_tier, status, avatar_config, personality, skills, tools, permissions, updated_at
+             FROM agents WHERE codename = ?1",
+        )?;
+        let mut rows = stmt.query(params![codename])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(Self::map_agent(row)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_channel_agent(&self, channel_id: i64) -> Result<Option<Agent>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT a.codename, a.display_name, a.role, a.model_tier, a.status, a.avatar_config, a.personality, a.skills, a.tools, a.permissions, a.updated_at
+             FROM channels c JOIN agents a ON a.codename = c.agent_codename
+             WHERE c.id = ?1",
+        )?;
+        let mut rows = stmt.query(params![channel_id])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(Self::map_agent(row)?)),
+            None => Ok(None),
+        }
     }
 
     pub fn update_agent_status(&self, codename: &str, status: &str) -> Result<()> {
@@ -439,6 +478,40 @@ impl Database {
             params![source, target, edge_type, new_weight, notes, now],
         )?;
         Ok(())
+    }
+
+    pub fn decay_relationships(&self, half_life_days: f64) -> Result<usize> {
+        self.decay_relationships_at(half_life_days, Utc::now())
+    }
+
+    pub fn decay_relationships_at(&self, half_life_days: f64, now: chrono::DateTime<Utc>) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let now_str = now.to_rfc3339();
+        let last: Option<String> = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'relationships_last_decay'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        conn.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES ('relationships_last_decay', ?1, ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            params![now_str],
+        )?;
+        let Some(last_ts) = last.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok()) else {
+            return Ok(0);
+        };
+        let elapsed_days = (now - last_ts.with_timezone(&Utc)).num_seconds() as f64 / 86_400.0;
+        if elapsed_days <= 0.0 || half_life_days <= 0.0 {
+            return Ok(0);
+        }
+        let factor = 0.5f64.powf(elapsed_days / half_life_days);
+        let n = conn.execute(
+            "UPDATE relationships SET weight = MAX(0.1, weight * ?1) WHERE updated_at < ?2",
+            params![factor, last_ts.with_timezone(&Utc).to_rfc3339()],
+        )?;
+        Ok(n)
     }
 
     // Temporary Specialists (strictly prefixed with temp_ and auto-retired after TTL)
@@ -542,7 +615,7 @@ impl Database {
         };
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(clean_b64.trim())
-            .unwrap_or_else(|_| data_base64.as_bytes().to_vec());
+            .context("Attachment data is not valid base64")?;
 
         let mut hasher = Sha256::new();
         hasher.update(&bytes);
@@ -868,6 +941,16 @@ impl Database {
         Ok(())
     }
 
+    pub fn set_task_status(&self, task_id: &str, status: &str, checkpoint: Option<&str>) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE tasks SET status = ?1, resume_checkpoint = COALESCE(?2, resume_checkpoint), updated_at = ?3 WHERE id = ?4",
+            params![status, checkpoint, now, task_id],
+        )?;
+        Ok(())
+    }
+
     // Memories (4-tier)
     pub fn get_memories(&self, category: Option<&str>) -> Result<Vec<MemoryItem>> {
         let conn = self.conn.lock().unwrap();
@@ -902,6 +985,25 @@ impl Database {
             tags: row.get(6)?,
             created_at: row.get(7)?,
         })
+    }
+
+    pub fn get_agent_memories(&self, codename: &str, limit: i64) -> Result<Vec<MemoryItem>> {
+        let conn = self.conn.lock().unwrap();
+        let own_tagged = format!("agent:{}:%", codename);
+        let own_prefixed = format!("{}%", codename);
+        let mut stmt = conn.prepare(
+            "SELECT id, category, content, provenance, confidence, is_speculation, tags, created_at
+             FROM memories
+             WHERE provenance LIKE ?1 OR provenance LIKE ?2 OR category = 'shared'
+             ORDER BY (provenance LIKE ?1 OR provenance LIKE ?2) DESC, created_at DESC
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![own_tagged, own_prefixed, limit], Self::map_memory)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     pub fn insert_memory(&self, mem: &MemoryItem) -> Result<()> {
@@ -942,12 +1044,13 @@ impl Database {
     // Unified Search across messages, tasks, memories
     pub fn search(&self, query: &str) -> Result<serde_json::Value> {
         let conn = self.conn.lock().unwrap();
-        let pattern = format!("%{}%", query);
+        let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let pattern = format!("%{}%", escaped);
 
         // Messages
         let mut msg_stmt = conn.prepare(
             "SELECT id, channel_id, sender, content, created_at FROM messages
-             WHERE content LIKE ?1 AND is_deleted = 0
+             WHERE content LIKE ?1 ESCAPE '\\' AND is_deleted = 0
              ORDER BY created_at DESC LIMIT 20",
         )?;
         let msg_rows = msg_stmt.query_map(params![pattern], |row| {
@@ -968,7 +1071,7 @@ impl Database {
         // Tasks
         let mut task_stmt = conn.prepare(
             "SELECT id, title, assignee, status, created_at FROM tasks
-             WHERE title LIKE ?1 OR description LIKE ?1
+             WHERE title LIKE ?1 ESCAPE '\\' OR description LIKE ?1 ESCAPE '\\'
              ORDER BY created_at DESC LIMIT 10",
         )?;
         let task_rows = task_stmt.query_map(params![pattern], |row| {
@@ -989,7 +1092,7 @@ impl Database {
         // Memories
         let mut mem_stmt = conn.prepare(
             "SELECT id, category, content, provenance, created_at FROM memories
-             WHERE content LIKE ?1 OR tags LIKE ?1
+             WHERE content LIKE ?1 ESCAPE '\\' OR tags LIKE ?1 ESCAPE '\\'
              ORDER BY created_at DESC LIMIT 10",
         )?;
         let mem_rows = mem_stmt.query_map(params![pattern], |row| {
@@ -1048,6 +1151,61 @@ impl Database {
             list.push(r?);
         }
         Ok(list)
+    }
+
+    pub fn save_decision(&self, d: &DecisionRow) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO decisions (id, title, description, level, proposer, status, votes_json, dissent_summary, created_at, resolved_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                votes_json = excluded.votes_json,
+                dissent_summary = excluded.dissent_summary,
+                resolved_at = excluded.resolved_at",
+            params![
+                d.id,
+                d.title,
+                d.description,
+                d.level,
+                d.proposer,
+                d.status,
+                d.votes_json,
+                d.dissent_summary,
+                d.created_at,
+                d.resolved_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn resolve_decision(&self, id: &str, status: &str) -> Result<Option<DecisionRow>> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE decisions SET status = ?1, resolved_at = ?2 WHERE id = ?3",
+            params![status, now, id],
+        )?;
+        let mut stmt = conn.prepare(
+            "SELECT id, title, description, level, proposer, status, votes_json, dissent_summary, created_at, resolved_at
+             FROM decisions WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(DecisionRow {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                description: row.get(2)?,
+                level: row.get(3)?,
+                proposer: row.get(4)?,
+                status: row.get(5)?,
+                votes_json: row.get(6)?,
+                dissent_summary: row.get(7)?,
+                created_at: row.get(8)?,
+                resolved_at: row.get(9)?,
+            })),
+            None => Ok(None),
+        }
     }
 
     // UI Deployments

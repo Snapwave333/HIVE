@@ -195,7 +195,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                       #agency-hq
                     </span>
                     <span className="text-[10px] text-hive-dimText font-mono flex-shrink-0">
-                      {latestMessages[0] ? formatTime(latestMessages[0].created_at) : "LIVE"}
+                      {latestMessages[0] ? formatTime(latestMessages[0].created_at) : ""}
                     </span>
                   </div>
                   <p className="text-xs text-hive-dimText truncate mt-1">
@@ -205,7 +205,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   </p>
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-[10px] bg-hive-base text-hive-lime border border-hive-lime/30 px-2 py-0.5 rounded-md font-mono">
-                      12 Agents Online
+                      {agents.length} agents
+                      {agents.some((a) => a.status === "thinking")
+                        ? ` · ${agents.filter((a) => a.status === "thinking").length} working`
+                        : ""}
                     </span>
                   </div>
                 </div>
@@ -277,7 +280,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                       </p>
 
                       <p className="text-xs text-hive-dimText truncate mt-0.5">
-                        {lastMsg ? stripMarkdown(lastMsg.content) : "Direct specialist line ready"}
+                        {lastMsg ? stripMarkdown(lastMsg.content) : "No messages yet"}
                       </p>
                     </div>
                   </div>

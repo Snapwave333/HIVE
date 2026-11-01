@@ -212,11 +212,20 @@ function Invoke-Doctor {
     }
 
     # NIM API Key check
-    $nimKey = [Environment]::GetEnvironmentVariable("NVIDIA_API_KEY", "User")
+    $nimKey = $null
+    $nimScope = $null
+    foreach ($scope in @("Process", "User", "Machine")) {
+        foreach ($name in @("NVIDIA_API_KEY", "NIM_API_KEY")) {
+            if (-not $nimKey) {
+                $val = [Environment]::GetEnvironmentVariable($name, $scope)
+                if ($val) { $nimKey = $val; $nimScope = "$name ($scope)" }
+            }
+        }
+    }
     if ($nimKey) {
-        Write-Host "  [OK] NVIDIA_API_KEY detected in User environment." -ForegroundColor Green
+        Write-Host "  [OK] NIM API key detected: $nimScope." -ForegroundColor Green
     } else {
-        Write-Host "  [WARN] NVIDIA_API_KEY not set. Falling back to offline/mock mode." -ForegroundColor Yellow
+        Write-Host "  [WARN] NVIDIA_API_KEY not set. Agents can't reach their models and will say so in chat until it's set." -ForegroundColor Yellow
     }
 
     # Google Ecosystem / gog CLI check

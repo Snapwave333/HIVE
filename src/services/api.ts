@@ -117,4 +117,6 @@ export const api = {
   setAudioMuteState: (isMuted: boolean) =>
     tauriInvoke<void>("set_audio_mute_state", { is_muted: isMuted }),
   getConstitution: () => tauriInvoke<Constitution>("get_constitution"),
+  getSetting: (key: string) => tauriInvoke<string | null>("get_setting", { key }),
+  setSetting: (key: string, value: string) => tauriInvoke<void>("set_setting", { key, value }),
 };

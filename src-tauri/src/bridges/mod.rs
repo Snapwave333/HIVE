@@ -4,11 +4,40 @@ use sha2::{Digest, Sha256};
 use std::io::Write;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+const CURL_BIN: &str = "curl.exe";
+#[cfg(not(target_os = "windows"))]
+const CURL_BIN: &str = "curl";
+
+const NIM_ENDPOINT: &str = "https://integrate.api.nvidia.com/v1/chat/completions";
+
+pub const NIM_FALLBACKS: [&str; 7] = [
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia/nemotron-3.5-bolt-e4b",
+    "openai/gpt-oss-20b",
+    "nvidia/nemotron-3-ultra-550b-a55b",
+    "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    "minimaxai/minimax-m3.1-flash",
+    "mistralai/mistral-large-4-1t-a52b",
+];
+
+const MAX_MODELS_PER_CALL: usize = 4;
+const CASCADE_BUDGET: Duration = Duration::from_secs(100);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChatTurn {
+    pub role: &'static str,
+    pub content: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeStatus {
@@ -42,7 +71,7 @@ impl EcosystemBridges {
                 return gobin;
             }
         }
-        PathBuf::from(r"C:\Users\chrom\gog-wrapper\gog.bat")
+        PathBuf::from("gog")
     }
 
     /// Resolve path to local Obsidian vault
@@ -69,9 +98,17 @@ impl EcosystemBridges {
     }
 
     pub fn check_all() -> BridgeStatus {
-        let google_account = Self::check_google_auth()
-            .unwrap_or_else(|_| "elikenny333@gmail.com".to_string());
-        let google_connected = !google_account.is_empty();
+        let (google_connected, google_account) = match Self::check_google_auth() {
+            Ok(out) => (
+                true,
+                out.lines()
+                    .map(str::trim)
+                    .find(|l| !l.is_empty())
+                    .unwrap_or_default()
+                    .to_string(),
+            ),
+            Err(_) => (false, String::new()),
+        };
 
         let obsidian_available = Self::check_obsidian().is_ok();
         let obsidian_vault_path = Self::resolve_vault_dir().to_string_lossy().to_string();
@@ -326,15 +363,24 @@ impl EcosystemBridges {
 
     /// Voice Synthesis Bridge (Kokoro / Windows SAPI Neural WAV Synthesizer)
     pub fn check_voice_engine() -> anyhow::Result<String> {
-        let mut cmd = Command::new("where");
-        cmd.arg("kokoro");
+        if !cfg!(target_os = "windows") {
+            anyhow::bail!("Voice synthesis uses Windows SAPI and is only available on Windows");
+        }
+        let mut cmd = Command::new("powershell");
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).GetInstalledVoices().Count",
+        ]);
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
         let output = cmd.output()?;
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        let voices = String::from_utf8_lossy(&output.stdout).trim().parse::<u32>().unwrap_or(0);
+        if output.status.success() && voices > 0 {
+            Ok(format!("Windows SAPI ({} voices installed)", voices))
         } else {
-            Ok("Windows SAPI SpeechSynthesizer".to_string())
+            anyhow::bail!("Windows SAPI has no installed voices")
         }
     }
 
@@ -436,35 +482,115 @@ impl EcosystemBridges {
         None
     }
 
-    /// Strip `<think>...</think>` blocks emitted by reasoning models (ported from NimCascadeRouter.cs)
-    fn strip_think(txt: &str) -> String {
-        let mut s = txt.to_string();
-        if let Ok(re) = regex::Regex::new(r"(?s)<think>.*?</think>") {
-            s = re.replace_all(&s, "").to_string();
-        }
+    fn think_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<think>.*?</think>").unwrap())
+    }
+
+    pub fn strip_think(txt: &str) -> String {
+        let mut s = Self::think_re().replace_all(txt, "").to_string();
         if let Some(idx) = s.rfind("</think>") {
             s = s[idx + 8..].to_string();
         }
         s.trim().to_string()
     }
 
-    /// Execute a single HTTP POST to NVIDIA NIM via curl.exe using stdin (--data-binary @-)
-    /// so Windows command-line escaping never mangles JSON payloads.
-    fn post_nim_request(key: &str, payload: &serde_json::Value) -> anyhow::Result<String> {
-        let payload_bytes = serde_json::to_vec(payload)?;
+    pub fn llm_configured() -> bool {
+        Self::nim_key().is_some()
+    }
 
-        let mut cmd = Command::new("curl.exe");
+    fn nim_key() -> Option<String> {
+        Self::get_env_key("NVIDIA_API_KEY").or_else(|| Self::get_env_key("NIM_API_KEY"))
+    }
+
+    fn cooldowns() -> &'static Mutex<HashMap<String, Instant>> {
+        static COOLDOWNS: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
+        COOLDOWNS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub fn is_cooling(model: &str) -> bool {
+        let mut map = Self::cooldowns().lock().unwrap_or_else(|e| e.into_inner());
+        match map.get(model) {
+            Some(until) if *until > Instant::now() => true,
+            Some(_) => {
+                map.remove(model);
+                false
+            }
+            None => false,
+        }
+    }
+
+    fn set_cooldown(model: &str, dur: Duration) {
+        let mut map = Self::cooldowns().lock().unwrap_or_else(|e| e.into_inner());
+        map.insert(model.to_string(), Instant::now() + dur);
+    }
+
+    fn clear_cooldown(model: &str) {
+        let mut map = Self::cooldowns().lock().unwrap_or_else(|e| e.into_inner());
+        map.remove(model);
+    }
+
+    pub fn cascade_order(primary: &str, is_cooling: &dyn Fn(&str) -> bool) -> Vec<String> {
+        let mut ready = Vec::new();
+        let mut cooling = Vec::new();
+        for model in std::iter::once(primary).chain(NIM_FALLBACKS.iter().copied()) {
+            let model = model.trim();
+            if model.is_empty()
+                || ready.iter().any(|m: &String| m == model)
+                || cooling.iter().any(|m: &String| m == model)
+            {
+                continue;
+            }
+            if is_cooling(model) {
+                cooling.push(model.to_string());
+            } else {
+                ready.push(model.to_string());
+            }
+        }
+        ready.extend(cooling);
+        ready
+    }
+
+    pub fn classify_http(status: u16, body: &str) -> NimFailure {
+        let detail = serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|j| {
+                j.pointer("/error/message")
+                    .or_else(|| j.pointer("/detail"))
+                    .or_else(|| j.pointer("/message"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| body.chars().take(200).collect());
+        match status {
+            401 | 403 => NimFailure::Auth(format!("HTTP {}: {}", status, detail)),
+            404 => NimFailure::ModelMissing(format!("HTTP 404: {}", detail)),
+            408 | 429 => NimFailure::RateLimited(format!("HTTP {}: {}", status, detail)),
+            500..=599 => NimFailure::Unavailable(format!("HTTP {}: {}", status, detail)),
+            _ => NimFailure::Other(format!("HTTP {}: {}", status, detail)),
+        }
+    }
+
+    fn post_nim_request(key: &str, payload: &serde_json::Value) -> Result<String, NimFailure> {
+        let payload_bytes =
+            serde_json::to_vec(payload).map_err(|e| NimFailure::Other(e.to_string()))?;
+
+        let mut cmd = Command::new(CURL_BIN);
         cmd.args([
             "-sS",
+            "--connect-timeout",
+            "10",
             "--max-time",
-            "25",
+            "45",
+            "-w",
+            "\n__HIVE_HTTP_STATUS__:%{http_code}",
             "-H",
             &format!("Authorization: Bearer {}", key),
             "-H",
             "Content-Type: application/json",
             "--data-binary",
             "@-",
-            "https://integrate.api.nvidia.com/v1/chat/completions",
+            NIM_ENDPOINT,
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -473,25 +599,42 @@ impl EcosystemBridges {
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let mut child = cmd.spawn()?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| NimFailure::Unavailable(format!("could not start {}: {}", CURL_BIN, e)))?;
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(&payload_bytes)?;
+            stdin
+                .write_all(&payload_bytes)
+                .map_err(|e| NimFailure::Unavailable(e.to_string()))?;
         }
 
-        let output = child.wait_with_output()?;
+        let output = child
+            .wait_with_output()
+            .map_err(|e| NimFailure::Unavailable(e.to_string()))?;
         if !output.status.success() {
-            anyhow::bail!(
-                "curl.exe exited with {}: {}",
+            return Err(NimFailure::Unavailable(format!(
+                "{} exited with {}: {}",
+                CURL_BIN,
                 output.status,
-                String::from_utf8_lossy(&output.stderr)
-            );
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
         }
 
-        let resp_str = String::from_utf8_lossy(&output.stdout);
-        let json: serde_json::Value = serde_json::from_str(&resp_str)?;
+        let raw = String::from_utf8_lossy(&output.stdout).to_string();
+        let (body, status) = match raw.rsplit_once("\n__HIVE_HTTP_STATUS__:") {
+            Some((b, code)) => (b.to_string(), code.trim().parse::<u16>().unwrap_or(0)),
+            None => (raw.clone(), 0),
+        };
+
+        if status != 0 && status != 200 {
+            return Err(Self::classify_http(status, &body));
+        }
+
+        let json: serde_json::Value =
+            serde_json::from_str(&body).map_err(|e| NimFailure::Other(format!("bad JSON from NIM: {}", e)))?;
 
         if let Some(err_msg) = json.pointer("/error/message").and_then(|v| v.as_str()) {
-            anyhow::bail!("NIM API error: {}", err_msg);
+            return Err(NimFailure::Other(err_msg.to_string()));
         }
 
         let content = json
@@ -500,80 +643,142 @@ impl EcosystemBridges {
             .map(Self::strip_think)
             .unwrap_or_default();
 
-        if !content.is_empty() {
-            return Ok(content);
+        if content.is_empty() {
+            Err(NimFailure::EmptyContent)
+        } else {
+            Ok(content)
         }
-
-        anyhow::bail!("Empty content from model (reasoning_content may have consumed tokens)")
     }
 
-    /// Authentic port of NimCascadeRouter.cs:
-    /// Calls NVIDIA NIM API starting with the agent's assigned `model_tier`,
-    /// providing REASONING_ROOM (2048 + 512 = 2560 max_tokens), retrying with
-    /// `enable_thinking: false` if reasoning tokens exhaust the limit, and cascading
-    /// across the verified NIM model roster if a model is rate-limited or unavailable.
-    pub fn call_nim_completion(
+    fn build_payload(
+        model: &str,
+        system_prompt: &str,
+        turns: &[ChatTurn],
+        max_tokens: u32,
+        disable_thinking: bool,
+    ) -> serde_json::Value {
+        let mut messages = vec![serde_json::json!({ "role": "system", "content": system_prompt })];
+        for t in turns {
+            messages.push(serde_json::json!({ "role": t.role, "content": t.content }));
+        }
+        let mut payload = serde_json::json!({
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.7
+        });
+        if disable_thinking {
+            payload["chat_template_kwargs"] = serde_json::json!({ "enable_thinking": false });
+        }
+        payload
+    }
+
+    pub fn call_nim_chat(
         model_tier: &str,
         system_prompt: &str,
-        user_message: &str,
+        turns: &[ChatTurn],
     ) -> anyhow::Result<String> {
-        let key = Self::get_env_key("NVIDIA_API_KEY")
-            .or_else(|| Self::get_env_key("NIM_API_KEY"))
+        let key = Self::nim_key()
             .ok_or_else(|| anyhow::anyhow!("NVIDIA_API_KEY is not set in environment"))?;
 
-        let fallback_cascade = [
-            model_tier,
-            "nvidia/nemotron-3.5-lightning-30b-a3b",
-            "nvidia/nemotron-3.5-bolt-e4b",
-            "openai/gpt-oss-20b",
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "nvidia/nemotron-3.5-super-vl-120b-a12b",
-            "minimaxai/minimax-m3.1-flash",
-            "mistralai/mistral-large-4-1t-a52b",
-        ];
+        let fallback_turn = [ChatTurn {
+            role: "user",
+            content: "Go ahead.".to_string(),
+        }];
+        let turns: &[ChatTurn] = if turns.is_empty() { &fallback_turn } else { turns };
 
-        let mut tried = Vec::new();
-        let mut last_err = String::new();
+        let started = Instant::now();
+        let mut last_err = String::from("no models attempted");
 
-        for &model in &fallback_cascade {
-            if model.is_empty() || tried.contains(&model) {
-                continue;
+        for (attempt, model) in Self::cascade_order(model_tier, &Self::is_cooling)
+            .into_iter()
+            .enumerate()
+        {
+            if attempt >= MAX_MODELS_PER_CALL || started.elapsed() > CASCADE_BUDGET {
+                break;
             }
-            tried.push(model);
 
-            // Attempt 1: Standard call with full REASONING_ROOM (2560 tokens)
-            let payload = serde_json::json!({
-                "model": model,
-                "messages": [
-                    { "role": "system", "content": system_prompt },
-                    { "role": "user", "content": user_message }
-                ],
-                "max_tokens": 2560,
-                "temperature": 0.65
-            });
+            let first = Self::post_nim_request(
+                &key,
+                &Self::build_payload(&model, system_prompt, turns, 2560, false),
+            );
+            let outcome = match first {
+                Err(NimFailure::EmptyContent) => Self::post_nim_request(
+                    &key,
+                    &Self::build_payload(&model, system_prompt, turns, 1024, true),
+                ),
+                other => other,
+            };
 
-            match Self::post_nim_request(&key, &payload) {
-                Ok(text) => return Ok(text),
-                Err(e) => {
-                    last_err = format!("{}: {}", model, e);
-                    // Attempt 2: Retry with enable_thinking = false (as in NimCascadeRouter.cs line 510)
-                    let payload_no_think = serde_json::json!({
-                        "model": model,
-                        "messages": [
-                            { "role": "system", "content": system_prompt },
-                            { "role": "user", "content": user_message }
-                        ],
-                        "max_tokens": 1024,
-                        "temperature": 0.65,
-                        "chat_template_kwargs": { "enable_thinking": false }
-                    });
-                    if let Ok(text) = Self::post_nim_request(&key, &payload_no_think) {
-                        return Ok(text);
+            match outcome {
+                Ok(text) => {
+                    Self::clear_cooldown(&model);
+                    return Ok(text);
+                }
+                Err(NimFailure::Auth(detail)) => {
+                    anyhow::bail!(
+                        "NVIDIA NIM rejected the API key ({}). Check NVIDIA_API_KEY.",
+                        detail
+                    );
+                }
+                Err(failure) => {
+                    if let Some(dur) = failure.cooldown() {
+                        Self::set_cooldown(&model, dur);
                     }
+                    last_err = format!("{}: {}", model, failure);
                 }
             }
         }
 
         anyhow::bail!("All NIM cascade models failed (last error: {})", last_err)
+    }
+
+    pub fn call_nim_completion(
+        model_tier: &str,
+        system_prompt: &str,
+        user_message: &str,
+    ) -> anyhow::Result<String> {
+        Self::call_nim_chat(
+            model_tier,
+            system_prompt,
+            &[ChatTurn {
+                role: "user",
+                content: user_message.to_string(),
+            }],
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NimFailure {
+    Auth(String),
+    RateLimited(String),
+    Unavailable(String),
+    ModelMissing(String),
+    EmptyContent,
+    Other(String),
+}
+
+impl NimFailure {
+    pub fn cooldown(&self) -> Option<Duration> {
+        match self {
+            NimFailure::RateLimited(_) => Some(Duration::from_secs(120)),
+            NimFailure::Unavailable(_) => Some(Duration::from_secs(300)),
+            NimFailure::ModelMissing(_) => Some(Duration::from_secs(1800)),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for NimFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NimFailure::Auth(d) => write!(f, "auth rejected ({})", d),
+            NimFailure::RateLimited(d) => write!(f, "rate limited ({})", d),
+            NimFailure::Unavailable(d) => write!(f, "unavailable ({})", d),
+            NimFailure::ModelMissing(d) => write!(f, "model not found ({})", d),
+            NimFailure::EmptyContent => write!(f, "empty response (reasoning used up the token budget)"),
+            NimFailure::Other(d) => write!(f, "{}", d),
+        }
     }
 }

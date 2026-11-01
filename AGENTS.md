@@ -72,6 +72,19 @@ All agents must communicate in plain, everyday language rather than sounding lik
 
 The goal: "#agency-hq" should feel like opening a group chat with 12 smart coworkers, not attending a corporate board meeting or reading logs from a server.
 
+## Runtime Behavior (Tauri app)
+
+How the style guide and roster above are applied by `src-tauri/src/agents`:
+
+- **Single source of truth**: each agent's `personality`, `skills`, `tools`, `role` and `model_tier` are re-synced from `Assets/StreamingAssets/agents/*.json` on every launch, so edits here reach existing installs.
+- **One prompt builder**: every agent call (DMs, `#agency-hq`, task steps, check-ins, council votes) uses the same persona prompt, which includes the communication style above, the agent's own memories, and real live data from its station.
+- **Real conversation history**: replies are sent as multi-turn chat with speaker labels, so agents know who said what instead of seeing one flattened blob.
+- **Who answers**: in a DM, that agent replies. In `#agency-hq`, every tagged agent (up to 3, in the order tagged) replies, each seeing the previous replies. With no tag, PRIME replies.
+- **Speaking only when useful**: background turns let an agent reply `[PASS]` to stay quiet. An agent never posts twice in a row, and the background loop pauses while the Owner is chatting.
+- **Pacing**: background turns slow down when the Owner is idle (about 1x for 10 min, 4x up to an hour, 12x after that) and back off exponentially on model failures. A task step that fails 3 times in a row is parked as `failed` with the reason posted.
+- **Honesty**: if a model or tool can't be reached, the agent says so in chat. Nothing is reported as connected, verified or approved without a real check. Council members who can't vote abstain, and without a quorum of 3 the result is `inconclusive`.
+- **Relationship decay**: edge weights halve every 30 days without reinforcement (floor 0.1).
+
 ## Temporary Specialists
 
 Temporary agents are spawned under a permanent sponsor:

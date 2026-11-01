@@ -4,6 +4,7 @@ use hive_lib::db::Database;
 use hive_lib::deployment::DeploymentEngine;
 use hive_lib::events::EventBus;
 use hive_lib::governance::{DecisionLevel, GovernanceEngine};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 #[test]
@@ -161,8 +162,14 @@ fn test_three_level_governance() {
     // Level 2: Significant -> Live NIM council debate & weighted vote
     let l2 = gov.propose_decision("Optimize SQLite WAL Checkpoint Interval", "Tune WAL autocheckpoint to 1000 pages for low-latency writes", DecisionLevel::Significant, "FORGE")
         .expect("Level 2 debate should succeed");
-    assert!(l2.status == "approved" || l2.status == "rejected", "Council must reach a decisive outcome");
-    assert_eq!(l2.votes.len(), 5, "All 5 council agents must cast weighted votes");
+    assert_eq!(l2.votes.len(), 5, "All 5 council agents must be recorded");
+    let cast = l2.votes.values().filter(|v| !v.abstained).count();
+    if cast < hive_lib::governance::QUORUM {
+        assert_eq!(l2.status, "inconclusive", "Without quorum the council must not fake a verdict");
+        assert!(l2.votes.values().filter(|v| v.abstained).all(|v| !v.approve));
+    } else {
+        assert!(l2.status == "approved" || l2.status == "rejected");
+    }
 
     // Level 3: Owner Controlled -> Requires user authorization
     let l3 = gov.propose_decision("Transfer System Authority", "Dangerous action", DecisionLevel::OwnerControlled, "PRIME")
@@ -211,13 +218,14 @@ fn test_four_tier_memory() {
 fn test_relationships_and_temp_specialists() {
     let db = Database::new_in_memory().expect("In-memory DB should initialize");
 
-    // Verify seeded relationships
     let rels = db.get_relationships().expect("Get relationships");
-    assert!(!rels.is_empty(), "Initial relationship graph should be seeded");
+    assert!(rels.is_empty(), "Relationship graph must start empty and only grow from real interactions");
 
-    // Record collaboration reinforcement
     db.record_relationship("SAGE", "FORGE", "collaborated", 0.2, Some("Co-authored benchmark"))
         .expect("Record relationship");
+    let rels = db.get_relationships().expect("Get relationships");
+    assert_eq!(rels.len(), 1);
+    assert!((rels[0].weight - 0.7).abs() < 1e-9);
 
     // Spawn temp specialist
     let spec = db
@@ -231,36 +239,64 @@ fn test_relationships_and_temp_specialists() {
 fn test_blue_green_deployment_and_rollback() {
     let db = Database::new_in_memory().expect("In-memory DB should initialize");
     let events = EventBus::new(16);
-    let engine = DeploymentEngine::new(db.clone(), events);
+    let root = std::env::temp_dir().join(format!("hive-deploy-test-{}", Uuid::new_v4()));
+    let engine = DeploymentEngine::with_root(db.clone(), events, root.clone());
 
-    // Valid deployment passes Constitution Validator
-    let dep = engine
-        .stage_and_deploy_version("v1.0.1-test", "FORGE", "Refined message bubble padding", true)
-        .expect("Valid deployment should succeed");
-    assert_eq!(dep.version, "v1.0.1-test");
-    assert!(dep.is_active);
-
-    // Forbidden pattern rejected by Constitution Validator
-    let bad = engine.stage_and_deploy_version(
-        "v1.0.2-bad",
-        "SPARK",
-        "Add VirtualWorld3D Metaverse dashboard",
-        true,
+    assert!(
+        engine.stage_and_deploy_version("v9.9.9", "FORGE", "no bundle source yet", true).is_err(),
+        "Deploying without a real running bundle must fail instead of faking a snapshot"
     );
-    assert!(bad.is_err(), "Constitution Validator must block forbidden 3D/Metaverse bloat");
 
-    // Atomic rollback restores previous version
+    let good_v1: Vec<(String, Vec<u8>)> = vec![
+        ("/index.html".to_string(), b"<html><script src=\"./assets/a.js\"></script></html>".to_vec()),
+        ("/assets/a.js".to_string(), b"console.log('v1')".to_vec()),
+    ];
+    let good_v2: Vec<(String, Vec<u8>)> = vec![
+        ("/index.html".to_string(), b"<html><script src=\"./assets/a.js\"></script></html>".to_vec()),
+        ("/assets/a.js".to_string(), b"console.log('v2')".to_vec()),
+    ];
+    let bad: Vec<(String, Vec<u8>)> = vec![
+        ("/index.html".to_string(), b"<html></html>".to_vec()),
+        ("/assets/a.js".to_string(), b"render(VirtualWorld3D)".to_vec()),
+    ];
+
+    let v1 = engine.stage_bundle("v1.0.0", "FORGE", "Baseline", &good_v1, true).expect("v1 deploys");
+    assert_eq!(v1.sha256_hash, hash_of(&good_v1));
+    assert!(PathBuf::from(&v1.directory_path).join("assets/a.js").is_file());
+
+    let v2 = engine.stage_bundle("v1.0.1", "FORGE", "Refined bubble padding", &good_v2, true).expect("v2 deploys");
+    assert!(v2.is_active);
+    assert_ne!(v1.sha256_hash, v2.sha256_hash, "Different bundles must hash differently");
+    assert_eq!(engine.resolve_asset("/assets/a.js").as_deref(), Some(&b"console.log('v2')"[..]));
+    assert_eq!(engine.resolve_asset("/__preview/v1.0.0/assets/a.js").as_deref(), Some(&b"console.log('v1')"[..]));
+    assert!(engine.resolve_asset("/../../etc/passwd").is_none(), "Path traversal must be rejected");
+
+    let blocked = engine.stage_bundle("v1.0.2", "SPARK", "Harmless sounding summary", &bad, true);
+    assert!(blocked.is_err(), "Validator must scan the real bundle source, not just the summary");
+    assert!(engine.stage_bundle("../evil", "SPARK", "x", &good_v1, true).is_err());
+
     let rolled = engine.rollback("Regression test rollback").expect("Rollback should succeed");
     assert_eq!(rolled.version, "v1.0.0");
-    assert!(rolled.is_active);
+    assert_eq!(engine.resolve_asset("/assets/a.js").as_deref(), Some(&b"console.log('v1')"[..]));
+
+    std::fs::write(PathBuf::from(&v2.directory_path).join("assets/a.js"), b"tampered").unwrap();
+    let after_tamper = engine.rollback("Try to roll onto tampered snapshot");
+    assert!(after_tamper.is_err(), "Tampered snapshots must fail the integrity check");
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+fn hash_of(files: &[(String, Vec<u8>)]) -> String {
+    hive_lib::deployment::bundle_hash(files)
 }
 
 #[test]
 fn test_unified_search() {
     let db = Database::new_in_memory().expect("In-memory DB should initialize");
-    let search_res = db.search("PRIME").expect("Search should succeed");
-
-    assert!(search_res["messages"].as_array().unwrap().len() >= 1, "Should find welcome message from PRIME");
+    let search_res = db.search("agency-hq").expect("Search should succeed");
+    assert!(!search_res["messages"].as_array().unwrap().is_empty(), "Should find the welcome message");
+    let constitution_hits = db.search("Constitution").expect("Search should succeed");
+    assert!(!constitution_hits["memories"].as_array().unwrap().is_empty(), "Should find constitution memories");
 }
 
 #[test]

@@ -104,6 +104,17 @@ impl EventBus {
         });
     }
 
+    pub fn emit_stored_message(&self, msg: &crate::db::models::Message) {
+        self.publish(HiveEvent::MessageCreated {
+            message_id: msg.id.clone(),
+            channel_id: msg.channel_id,
+            sender: msg.sender.clone(),
+            sender_role: msg.sender_role.clone(),
+            content: msg.content.clone(),
+            timestamp: msg.created_at.clone(),
+        });
+    }
+
     pub fn emit_typing(&self, channel_id: i64, codename: &str, activity: &str, is_typing: bool) {
         self.publish(HiveEvent::AgentTyping {
             channel_id,

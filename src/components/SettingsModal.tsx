@@ -22,6 +22,7 @@ interface SettingsModalProps {
   onSelectFont: (font: string) => void;
   fontSize: number;
   onSetFontSize: (size: number) => void;
+  isMuted?: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -35,6 +36,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectFont,
   fontSize,
   onSetFontSize,
+  isMuted = true,
 }) => {
   const [tab, setTab] = useState<
     "constitution" | "deployments" | "society" | "accessibility" | "bridges" | "lifecycle"
@@ -45,6 +47,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [liveBridges, setLiveBridges] = useState<BridgeStatus | null>(bridgeStatus ?? null);
+  const [bridgesLoading, setBridgesLoading] = useState<boolean>(false);
+  const [deploying, setDeploying] = useState<boolean>(false);
+
+  const refreshBridges = async () => {
+    setBridgesLoading(true);
+    try {
+      setLiveBridges(await api.getBridgeStatus());
+    } catch (e) {
+      setStatusBanner(`Bridge check failed: ${String(e)}`);
+    } finally {
+      setBridgesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (bridgeStatus) setLiveBridges(bridgeStatus);
+  }, [bridgeStatus]);
+
+  useEffect(() => {
+    if (isOpen && tab === "bridges") refreshBridges();
+  }, [isOpen, tab]);
 
   useEffect(() => {
     if (isOpen) {
@@ -59,19 +83,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   const handleDeployNewVersion = async () => {
+    setDeploying(true);
     try {
-      const nextVer = `v1.0.${deployments.length}`;
-      await api.deployUiVersion(
+      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "-");
+      const nextVer = `snapshot-${stamp}`;
+      const dep = await api.deployUiVersion(
         nextVer,
-        "VISION",
-        "Autonomous UI refinement verified against Constitution v1.0.0",
-        true
+        "OWNER",
+        "Manual snapshot of the running UI build from Settings",
+        false
       );
       const updated = await api.getUiDeployments();
       setDeployments(updated);
-      setStatusBanner(`Deployed ${nextVer} with verified SHA-256 bundle & backup.`);
+      setStatusBanner(`Snapshotted ${dep.version} (sha256 ${dep.sha256_hash.slice(0, 12)}…). Preview it or keep it as a rollback point.`);
     } catch (e) {
-      setStatusBanner(`Deployment blocked: ${String(e)}`);
+      setStatusBanner(`Snapshot blocked: ${String(e)}`);
+    } finally {
+      setDeploying(false);
     }
   };
 
@@ -80,7 +108,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const target = await api.rollbackUiVersion("Manual user rollback from Settings");
       const updated = await api.getUiDeployments();
       setDeployments(updated);
-      setStatusBanner(`Rolled back atomically to ${target.version}.`);
+      setStatusBanner(`Rolled back to ${target.version}. Reloading the UI...`);
     } catch (e) {
       setStatusBanner(`Rollback notice: ${String(e)}`);
     }
@@ -198,21 +226,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <M3Icon name="account_tree" size={16} className="text-hive-lime" /> Blue/Green UI Version Manager
                   </div>
                   <p className="text-hive-dimText mt-0.5">
-                    Every UI bundle is verified against Constitution v1.0.0, SHA-256 hashed, and backed up before atomic promotion.
+                    Snapshots copy the running UI bundle to disk, scan its code against the Constitution, and SHA-256 hash every file. The active snapshot is what loads; rollback re-verifies the hash before switching.
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => api.openPreviewWindow("preview")}
-                    className="px-2.5 py-1.5 rounded bg-hive-base border border-hive-cyan/40 text-hive-cyan hover:bg-hive-cyan/10 flex items-center gap-1"
-                  >
-                    <M3Icon name="visibility" size={15} /> Preview Window
-                  </button>
-                  <button
                     onClick={handleDeployNewVersion}
-                    className="px-2.5 py-1.5 rounded bg-hive-lime text-hive-base font-semibold hover:bg-hive-lime/90"
+                    disabled={deploying}
+                    className="px-2.5 py-1.5 rounded bg-hive-lime text-hive-base font-semibold hover:bg-hive-lime/90 disabled:opacity-50"
                   >
-                    + Verify & Snapshot
+                    {deploying ? "Snapshotting..." : "+ Verify & Snapshot"}
                   </button>
                   <button
                     onClick={handleRollback}
@@ -242,7 +265,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               : "bg-hive-base text-hive-dimText"
                           }`}
                         >
-                          {d.is_active ? "ACTIVE" : "ARCHIVED"}
+                          {d.is_active ? "ACTIVE" : "STANDBY"}
                         </span>
                       </div>
                       <div className="text-hive-brightText mt-1">{d.verification_log || d.directory_path}</div>
@@ -250,6 +273,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         SHA-256: {d.sha256_hash.slice(0, 24)}...
                       </div>
                     </div>
+                    {d.directory_path.endsWith("bundle") && (
+                      <button
+                        onClick={() =>
+                          api.openPreviewWindow(d.version).catch((e) => setStatusBanner(`Preview failed: ${String(e)}`))
+                        }
+                        className="shrink-0 ml-3 px-2.5 py-1.5 rounded bg-hive-base border border-hive-cyan/40 text-hive-cyan hover:bg-hive-cyan/10 flex items-center gap-1"
+                      >
+                        <M3Icon name="visibility" size={15} /> Preview
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -418,53 +451,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {tab === "bridges" && (
             <div className="space-y-3 text-xs">
-              <div className="p-3 rounded bg-hive-surface border border-hive-border flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-hive-brightText">Google Account Bridge (gog)</div>
-                  <div className="text-hive-dimText font-mono text-[11px] mt-0.5">
-                    Account: {bridgeStatus?.google_account || "elikenny333@gmail.com"}
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 bg-hive-lime/10 text-hive-lime border border-hive-lime/30 rounded font-mono text-[10px]">
-                  CONNECTED
+              <div className="flex items-center justify-between">
+                <span className="text-hive-dimText">
+                  {liveBridges ? "Checked just now on this machine." : "Checking bridges..."}
                 </span>
+                <button
+                  onClick={refreshBridges}
+                  disabled={bridgesLoading}
+                  className="px-2.5 py-1 rounded bg-hive-base border border-hive-border text-hive-dimText hover:text-hive-brightText flex items-center gap-1 disabled:opacity-50"
+                >
+                  <M3Icon name="refresh" size={15} /> {bridgesLoading ? "Checking..." : "Re-check"}
+                </button>
               </div>
-
-              <div className="p-3 rounded bg-hive-surface border border-hive-border flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-hive-brightText">Obsidian Vault Bridge</div>
-                  <div className="text-hive-dimText font-mono text-[11px] mt-0.5">
-                    Direct markdown note read/write/search inside local vault (`/obsidian`)
+              {[
+                {
+                  title: "Language model provider",
+                  detail: liveBridges?.llm_provider || "Unknown",
+                  ok: !!liveBridges && !liveBridges.llm_provider.startsWith("Unconfigured"),
+                  okLabel: "CONFIGURED",
+                  badLabel: "NOT CONFIGURED",
+                },
+                {
+                  title: "Google Account Bridge (gog)",
+                  detail: liveBridges?.google_connected
+                    ? `Account: ${liveBridges.google_account || "authenticated"}`
+                    : "gog CLI not found or not signed in (`gog auth login`)",
+                  ok: !!liveBridges?.google_connected,
+                  okLabel: "CONNECTED",
+                  badLabel: "NOT CONNECTED",
+                },
+                {
+                  title: "Obsidian Vault Bridge",
+                  detail: liveBridges?.obsidian_vault_path || "Vault path unknown",
+                  ok: !!liveBridges?.obsidian_available,
+                  okLabel: "AVAILABLE",
+                  badLabel: "UNAVAILABLE",
+                },
+                {
+                  title: "OpenCode Chrome Relay",
+                  detail: "`browser-relay` on PATH, used by `/browser`",
+                  ok: !!liveBridges?.browser_relay_available,
+                  okLabel: "AVAILABLE",
+                  badLabel: "NOT INSTALLED",
+                },
+                {
+                  title: "Speech Synthesizer (Windows SAPI)",
+                  detail: isMuted ? "Muted. Plays only when you click a message's speaker button." : "Unmuted. Plays only on click.",
+                  ok: !!liveBridges?.voice_engine_available,
+                  okLabel: "READY",
+                  badLabel: "UNAVAILABLE",
+                },
+              ].map((b) => (
+                <div
+                  key={b.title}
+                  className="p-3 rounded bg-hive-surface border border-hive-border flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-hive-brightText">{b.title}</div>
+                    <div className="text-hive-dimText font-mono text-[11px] mt-0.5 truncate">{b.detail}</div>
                   </div>
+                  <span
+                    className={`shrink-0 px-2 py-0.5 rounded font-mono text-[10px] border ${
+                      !liveBridges
+                        ? "bg-hive-base text-hive-dimText border-hive-border"
+                        : b.ok
+                        ? "bg-hive-lime/10 text-hive-lime border-hive-lime/30"
+                        : "bg-red-500/10 text-red-400 border-red-500/30"
+                    }`}
+                  >
+                    {!liveBridges ? "CHECKING" : b.ok ? b.okLabel : b.badLabel}
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 bg-hive-cyan/10 text-hive-cyan border border-hive-cyan/30 rounded font-mono text-[10px]">
-                  ACTIVE
-                </span>
-              </div>
-
-              <div className="p-3 rounded bg-hive-surface border border-hive-border flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-hive-brightText">OpenCode Chrome Relay</div>
-                  <div className="text-hive-dimText font-mono text-[11px] mt-0.5">
-                    Live browser inspection & navigation via `browser-relay` (`/browser`)
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 bg-hive-cyan/10 text-hive-cyan border border-hive-cyan/30 rounded font-mono text-[10px]">
-                  ACTIVE
-                </span>
-              </div>
-
-              <div className="p-3 rounded bg-hive-surface border border-hive-border flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-hive-brightText">Local Neural Speech & WAV Synthesizer</div>
-                  <div className="text-hive-dimText font-mono text-[11px] mt-0.5">
-                    On-demand WAV synthesis with base64 audio playback
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 bg-hive-lime/10 text-hive-lime border border-hive-lime/30 rounded font-mono text-[10px]">
-                  READY (MUTED)
-                </span>
-              </div>
+              ))}
             </div>
           )}
 

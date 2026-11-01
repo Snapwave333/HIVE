@@ -134,3 +134,17 @@ pub struct AuditEntry {
     pub status: String,
     pub timestamp: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionRow {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub level: u8,
+    pub proposer: String,
+    pub status: String,
+    pub votes_json: String,
+    pub dissent_summary: Option<String>,
+    pub created_at: String,
+    pub resolved_at: Option<String>,
+}

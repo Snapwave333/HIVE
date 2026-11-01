@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Component, ErrorInfo, ReactNode } from "react";
+import React, { useState, useEffect, useRef, Component, ErrorInfo, ReactNode } from "react";
 import { Channel, Agent, Message, TaskChunk, BridgeStatus, Constitution } from "./types";
 import { api } from "./services/api";
 import { NavRail } from "./components/NavRail";
@@ -11,11 +11,11 @@ import { SearchModal } from "./components/SearchModal";
 
 class HiveErrorBoundary extends Component<
   { children: ReactNode },
-  { hasError: boolean; errorMsg: string }
+  { hasError: boolean; errorMsg: string; recovery: string }
 > {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false, errorMsg: "" };
+    this.state = { hasError: false, errorMsg: "", recovery: "Attempting rollback..." };
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -23,25 +23,25 @@ class HiveErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("H.I.V.E. UI ErrorBoundary caught error, triggering rollback:", error, errorInfo);
-    api.rollbackUiVersion(`Auto-rollback from ErrorBoundary: ${error.message}`).catch(() => {});
+    console.error("H.I.V.E. UI error, attempting rollback:", error, errorInfo);
+    api
+      .rollbackUiVersion(`Auto-rollback from ErrorBoundary: ${error.message}`)
+      .then((dep) => this.setState({ recovery: `Rolled back to ${dep.version}. The window will reload onto it.` }))
+      .catch((e) => this.setState({ recovery: `No rollback available (${String(e)}). Reload to try again.` }));
   }
 
   render() {
     if (this.state.hasError) {
       return (
         <div className="h-screen w-screen bg-hive-base text-hive-brightText flex flex-col items-center justify-center p-6 space-y-3 font-segoe">
-          <div className="text-hive-lime font-bold text-lg">
-            ⬡ H.I.V.E. Self-Healing Recovery Triggered
-          </div>
-          <p className="text-xs text-hive-dimText max-w-md text-center">
-            An unhandled UI exception occurred ({this.state.errorMsg}). The Blue/Green Deployment Engine has rolled back to the last verified bundle.
-          </p>
+          <div className="text-hive-lime font-bold text-lg">⬡ H.I.V.E. hit a UI error</div>
+          <p className="text-xs text-hive-dimText max-w-md text-center">{this.state.errorMsg}</p>
+          <p className="text-xs text-hive-brightText max-w-md text-center">{this.state.recovery}</p>
           <button
-            onClick={() => this.setState({ hasError: false, errorMsg: "" })}
+            onClick={() => window.location.reload()}
             className="px-4 py-1.5 rounded bg-hive-cyan text-hive-base font-semibold text-xs"
           >
-            Reload Verified Shell
+            Reload
           </button>
         </div>
       );
@@ -49,6 +49,14 @@ class HiveErrorBoundary extends Component<
     return this.props.children;
   }
 }
+
+type TypingState = { agent: string; activity: string };
+
+const appendUnique = (list: Message[], msg: Message): Message[] =>
+  list.some((m) => m.id === msg.id) ? list : [...list, msg];
+
+const FONT_SIZE_MIN = 12;
+const FONT_SIZE_MAX = 20;
 
 export const App: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -66,128 +74,144 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; sender: string; snippet: string } | null>(null);
-  const [typingIndicator, setTypingIndicator] = useState<{ agent: string; activity: string } | null>(null);
+  const [typingByChannel, setTypingByChannel] = useState<Record<number, Record<string, TypingState>>>({});
   const [constitution, setConstitution] = useState<Constitution | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null);
 
-  const loadData = useCallback(async () => {
-    try {
-      const [chList, agList, tList, muteState, agState, constData, brStatus] = await Promise.all([
-        api.getChannels(),
-        api.getAgents(),
-        api.getTasks(),
-        api.getAudioMuteState(),
-        api.getAgencyState(),
-        api.getConstitution().catch(() => null),
-        api.getBridgeStatus().catch(() => null),
-      ]);
-
-      setChannels(chList);
-      setAgents(agList);
-      setTasks(tList);
-      setIsMuted(muteState);
-      setAgencyState(agState);
-      if (constData) setConstitution(constData);
-      if (brStatus) setBridgeStatus(brStatus);
-
-      const activeMsgs = await api.getMessages(activeChannelId);
-      setMessages(activeMsgs);
-
-      const latestMap: Record<number, Message> = {};
-      if (activeMsgs.length > 0) {
-        latestMap[activeChannelId] = activeMsgs[activeMsgs.length - 1];
-      }
-      setLatestMessages(latestMap);
-    } catch (err) {
-      console.error("Failed to load initial H.I.V.E. data:", err);
-    }
-  }, [activeChannelId]);
+  const activeChannelRef = useRef<number>(activeChannelId);
+  activeChannelRef.current = activeChannelId;
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [chList, agList, tList, muteState, agState, constData, font, size] = await Promise.all([
+          api.getChannels(),
+          api.getAgents(),
+          api.getTasks(),
+          api.getAudioMuteState(),
+          api.getAgencyState(),
+          api.getConstitution().catch(() => null),
+          api.getSetting("font").catch(() => null),
+          api.getSetting("font_size").catch(() => null),
+        ]);
+        if (cancelled) return;
+        setChannels(chList);
+        setAgents(agList);
+        setTasks(tList);
+        setIsMuted(muteState);
+        setAgencyState(agState);
+        if (constData) setConstitution(constData);
+        if (font) setCurrentFont(font);
+        const parsedSize = Number(size);
+        if (parsedSize >= FONT_SIZE_MIN && parsedSize <= FONT_SIZE_MAX) setFontSize(parsedSize);
+
+        const previews = await Promise.all(
+          chList.map((c) =>
+            api
+              .getMessages(c.id, 1)
+              .then((m) => [c.id, m[m.length - 1]] as const)
+              .catch(() => [c.id, undefined] as const)
+          )
+        );
+        if (cancelled) return;
+        setLatestMessages((prev) => {
+          const next = { ...prev };
+          for (const [id, m] of previews) if (m && !next[id]) next[id] = m;
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to load initial H.I.V.E. data:", err);
+      }
+    })();
+    api.getBridgeStatus().then((b) => !cancelled && setBridgeStatus(b)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    api.getMessages(activeChannelId).then((msgs) => {
-      setMessages(msgs);
-      if (msgs.length > 0) {
-        setLatestMessages((prev) => ({
-          ...prev,
-          [activeChannelId]: msgs[msgs.length - 1],
-        }));
-      }
-    });
+    let cancelled = false;
+    setMessages([]);
+    api
+      .getMessages(activeChannelId)
+      .then((msgs) => {
+        if (cancelled) return;
+        setMessages(msgs);
+        if (msgs.length > 0) {
+          setLatestMessages((prev) => ({ ...prev, [activeChannelId]: msgs[msgs.length - 1] }));
+        }
+      })
+      .catch((err) => console.error("Failed to load messages:", err));
+    return () => {
+      cancelled = true;
+    };
   }, [activeChannelId]);
 
-  // Listen to Tauri hive-event
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let disposed = false;
 
-    const setupListener = async () => {
-      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-        const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<any>("hive-event", (event) => {
-          const payload = event.payload;
-          if (!payload) return;
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
 
-          if (payload.type === "agent.message.created") {
-            const data = payload.payload;
-            const newMsg: Message = {
-              id: data.message_id,
-              channel_id: data.channel_id,
-              sender: data.sender,
-              sender_role: "Agent",
-              content: data.content,
-              is_pinned: false,
-              is_edited: false,
-              is_deleted: false,
-              created_at: data.timestamp,
-              updated_at: data.timestamp,
-            };
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const stop = await listen<any>("hive-event", (event) => {
+        const payload = event.payload;
+        if (!payload) return;
+        const data = payload.payload;
 
-            setLatestMessages((prev) => ({
-              ...prev,
-              [data.channel_id]: newMsg,
-            }));
-
-            if (data.channel_id === activeChannelId) {
-              setMessages((prev) => [...prev, newMsg]);
-            }
-          } else if (payload.type === "agent.typing") {
-            const data = payload.payload;
-            setAgents((prev) =>
-              prev.map((a) =>
-                a.codename === data.agent
-                  ? { ...a, status: data.is_typing ? "thinking" : "available" }
-                  : a
-              )
-            );
-            if (data.channel_id === activeChannelId) {
-              if (data.is_typing) {
-                setTypingIndicator({ agent: data.agent, activity: data.activity });
-              } else {
-                setTypingIndicator(null);
-              }
-            }
-          } else if (payload.type === "task.step_completed" || payload.type === "task.created") {
-            api.getTasks().then(setTasks);
-          } else if (payload.type === "system.lifecycle") {
-            setAgencyState(payload.payload.state);
-          } else if (payload.type === "audio.mute_toggled") {
-            setIsMuted(payload.payload.is_muted);
+        if (payload.type === "agent.message.created") {
+          const newMsg: Message = {
+            id: data.message_id,
+            channel_id: data.channel_id,
+            sender: data.sender,
+            sender_role: data.sender_role ?? undefined,
+            content: data.content,
+            is_pinned: false,
+            is_edited: false,
+            is_deleted: false,
+            created_at: data.timestamp,
+            updated_at: data.timestamp,
+          };
+          setLatestMessages((prev) => ({ ...prev, [data.channel_id]: newMsg }));
+          if (data.channel_id === activeChannelRef.current) {
+            setMessages((prev) => appendUnique(prev, newMsg));
           }
-        });
-      }
-    };
-
-    setupListener();
+        } else if (payload.type === "agent.typing") {
+          const codename: string = data.codename;
+          setAgents((prev) =>
+            prev.map((a) =>
+              a.codename === codename ? { ...a, status: data.is_typing ? "thinking" : "available" } : a
+            )
+          );
+          setTypingByChannel((prev) => {
+            const forChannel = { ...(prev[data.channel_id] || {}) };
+            if (data.is_typing) {
+              forChannel[codename] = { agent: codename, activity: data.activity };
+            } else {
+              delete forChannel[codename];
+            }
+            return { ...prev, [data.channel_id]: forChannel };
+          });
+        } else if (payload.type === "task.step_completed" || payload.type === "task.created") {
+          api.getTasks().then(setTasks).catch(() => {});
+        } else if (payload.type === "system.lifecycle") {
+          setAgencyState(data.state);
+        } else if (payload.type === "audio.mute_toggled") {
+          setIsMuted(data.is_muted);
+        }
+      });
+      if (disposed) stop();
+      else unlisten = stop;
+    })();
 
     return () => {
+      disposed = true;
       if (unlisten) unlisten();
     };
-  }, [activeChannelId]);
+  }, []);
 
-  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -204,6 +228,28 @@ export const App: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const handleSelectFont = (font: string) => {
+    setCurrentFont(font);
+    api.setSetting("font", font).catch(() => {});
+  };
+
+  const handleSetFontSize = (size: number) => {
+    const clamped = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, size));
+    setFontSize(clamped);
+    api.setSetting("font_size", String(clamped)).catch(() => {});
+  };
+
+  const typingAgents = Object.values(typingByChannel[activeChannelId] || {});
+  const typingIndicator: TypingState | null =
+    typingAgents.length === 0
+      ? null
+      : typingAgents.length === 1
+      ? typingAgents[0]
+      : {
+          agent: typingAgents.map((t) => t.agent).join(", @"),
+          activity: "are typing...",
+        };
+
   const handleSendMessage = async (
     content: string,
     replyToId?: string,
@@ -211,7 +257,7 @@ export const App: React.FC = () => {
   ) => {
     try {
       const msg = await api.sendMessage(activeChannelId, content, attachmentsJson, replyToId);
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => appendUnique(prev, msg));
       setLatestMessages((prev) => ({
         ...prev,
         [activeChannelId]: msg,
@@ -236,7 +282,7 @@ export const App: React.FC = () => {
   const handleForwardMessage = async (messageId: string, targetChannelId: number) => {
     const forwarded = await api.forwardMessage(messageId, targetChannelId);
     if (targetChannelId === activeChannelId) {
-      setMessages((prev) => [...prev, forwarded]);
+      setMessages((prev) => appendUnique(prev, forwarded));
     }
   };
 
@@ -421,9 +467,10 @@ export const App: React.FC = () => {
           agencyState={agencyState}
           onSetAgencyState={handleSetAgencyState}
           currentFont={currentFont}
-          onSelectFont={setCurrentFont}
+          onSelectFont={handleSelectFont}
           fontSize={fontSize}
-          onSetFontSize={setFontSize}
+          onSetFontSize={handleSetFontSize}
+          isMuted={isMuted}
         />
       </div>
     </HiveErrorBoundary>

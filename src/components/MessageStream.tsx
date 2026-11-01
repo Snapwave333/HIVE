@@ -1,9 +1,37 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Message, Agent, TaskChunk, Channel } from "../types";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TaskCard } from "./TaskCard";
 import { M3Icon } from "./M3Icon";
+
+const markdownComponents: Components = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  code: ({ children }) => (
+    <code className="bg-hive-base px-1.5 py-0.5 rounded-md text-[11.5px] font-mono text-hive-lime border border-hive-border">
+      {children}
+    </code>
+  ),
+  pre: ({ children }) => (
+    <pre className="bg-hive-base p-3 rounded-xl border border-hive-border text-[11.5px] font-mono overflow-x-auto my-2.5 text-hive-lime">
+      {children}
+    </pre>
+  ),
+  ul: ({ children }) => <ul className="list-disc ml-5 my-1.5 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-5 my-1.5 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => (
+    <strong className="text-hive-brightText font-semibold">{children}</strong>
+  ),
+};
+
+const remarkPlugins = [remarkGfm];
+
+const MarkdownContent = React.memo(({ content }: { content: string }) => (
+  <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
+    {content}
+  </ReactMarkdown>
+));
 
 interface MessageStreamProps {
   messages: Message[];
@@ -140,30 +168,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
                 </div>
               ) : (
                 <div className="text-[13px] leading-relaxed prose prose-invert max-w-none break-words">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                      code: ({ children }) => (
-                        <code className="bg-hive-base px-1.5 py-0.5 rounded-md text-[11.5px] font-mono text-hive-lime border border-hive-border">
-                          {children}
-                        </code>
-                      ),
-                      pre: ({ children }) => (
-                        <pre className="bg-hive-base p-3 rounded-xl border border-hive-border text-[11.5px] font-mono overflow-x-auto my-2.5 text-hive-lime">
-                          {children}
-                        </pre>
-                      ),
-                      ul: ({ children }) => <ul className="list-disc ml-5 my-1.5 space-y-1">{children}</ul>,
-                      ol: ({ children }) => <ol className="list-decimal ml-5 my-1.5 space-y-1">{children}</ol>,
-                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                      strong: ({ children }) => (
-                        <strong className="text-hive-brightText font-semibold">{children}</strong>
-                      ),
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                  <MarkdownContent content={msg.content} />
                 </div>
               )}
 
