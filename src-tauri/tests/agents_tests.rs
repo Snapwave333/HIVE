@@ -509,3 +509,13 @@ fn test_databases_never_write_into_the_real_attachments_folder() {
     assert!(meta.file_path.starts_with(std::env::temp_dir().to_string_lossy().as_ref()));
     assert!(!meta.file_path.starts_with(Database::app_root_dir().to_string_lossy().as_ref()));
 }
+
+#[test]
+fn cli_bridge_rejects_shell_metacharacters_before_spawning() {
+    for bad in ["%NVIDIA_API_KEY%", "a&calc", "x|y", "^&", "\"quoted\"", "(group)", "!delayed!", "a;b", "$(x)", "`x`", "a\nb"] {
+        let err = EcosystemBridges::gog_cli_exec(&["drive", "ls", bad]).unwrap_err().to_string();
+        assert!(err.contains("unsafe shell character"), "{:?} should be rejected before running, got: {}", bad, err);
+    }
+    let err = EcosystemBridges::gog_cli_exec(&["format", "c:"]).unwrap_err().to_string();
+    assert!(err.contains("allowlist"));
+}

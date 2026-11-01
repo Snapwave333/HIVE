@@ -135,7 +135,7 @@ impl EcosystemBridges {
 
     /// Validate CLI arguments to prevent command injection
     fn sanitize_arg(arg: &str) -> anyhow::Result<String> {
-        let forbidden = ['&', '|', ';', '`', '$', '>', '<', '\n', '\r'];
+        let forbidden = ['&', '|', ';', '`', '$', '>', '<', '\n', '\r', '%', '^', '"', '(', ')', '!', '\0'];
         if arg.chars().any(|c| forbidden.contains(&c)) {
             anyhow::bail!("Rejected argument containing unsafe shell character: {}", arg);
         }
