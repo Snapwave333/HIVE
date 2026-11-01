@@ -340,7 +340,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           <button
             onClick={onToggleMute}
             className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
-              isMuted ? "text-hive-dimText/60 hover:text-hive-dimText" : "text-hive-lime hover:bg-hive-lime/10"
+              isMuted ? "text-hive-dimText hover:text-hive-brightText" : "text-hive-lime hover:bg-hive-lime/10"
             }`}
             title={isMuted ? "Speech is muted. Click to allow playback on click." : "Speech playback allowed. Click to mute."}
           >

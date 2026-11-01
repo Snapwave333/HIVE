@@ -20,7 +20,7 @@ export default {
           accent: "#85D94B",
           cyan: "#85D94B",
           lime: "#85D94B",
-          dimText: "#7A7A7A",
+          dimText: "#8A8A8A",
           brightText: "#F2F2F2",
           highlight: "#171717"
         }
