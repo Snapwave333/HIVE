@@ -13,18 +13,18 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 const AGENT_JSONS: &[(&str, &str)] = &[
-    ("PRIME", include_str!("../../../Assets/StreamingAssets/agents/PRIME.json")),
-    ("SAGE", include_str!("../../../Assets/StreamingAssets/agents/SAGE.json")),
-    ("FORGE", include_str!("../../../Assets/StreamingAssets/agents/FORGE.json")),
-    ("SENTINEL", include_str!("../../../Assets/StreamingAssets/agents/SENTINEL.json")),
-    ("VOICE", include_str!("../../../Assets/StreamingAssets/agents/VOICE.json")),
-    ("ARCHIVIST", include_str!("../../../Assets/StreamingAssets/agents/ARCHIVIST.json")),
-    ("CONDUCTOR", include_str!("../../../Assets/StreamingAssets/agents/CONDUCTOR.json")),
-    ("VISION", include_str!("../../../Assets/StreamingAssets/agents/VISION.json")),
-    ("LEDGER", include_str!("../../../Assets/StreamingAssets/agents/LEDGER.json")),
-    ("LINK", include_str!("../../../Assets/StreamingAssets/agents/LINK.json")),
-    ("GAUGE", include_str!("../../../Assets/StreamingAssets/agents/GAUGE.json")),
-    ("SPARK", include_str!("../../../Assets/StreamingAssets/agents/SPARK.json")),
+    ("PRIME", include_str!("../../../agents/PRIME.json")),
+    ("SAGE", include_str!("../../../agents/SAGE.json")),
+    ("FORGE", include_str!("../../../agents/FORGE.json")),
+    ("SENTINEL", include_str!("../../../agents/SENTINEL.json")),
+    ("VOICE", include_str!("../../../agents/VOICE.json")),
+    ("ARCHIVIST", include_str!("../../../agents/ARCHIVIST.json")),
+    ("CONDUCTOR", include_str!("../../../agents/CONDUCTOR.json")),
+    ("VISION", include_str!("../../../agents/VISION.json")),
+    ("LEDGER", include_str!("../../../agents/LEDGER.json")),
+    ("LINK", include_str!("../../../agents/LINK.json")),
+    ("GAUGE", include_str!("../../../agents/GAUGE.json")),
+    ("SPARK", include_str!("../../../agents/SPARK.json")),
 ];
 
 #[derive(Clone)]
@@ -151,7 +151,6 @@ impl Database {
             )?;
         }
 
-        // 2. Seed 12 Permanent Agents from StreamingAssets JSON definitions
         for (idx, (codename, raw_json)) in AGENT_JSONS.iter().enumerate() {
             let parsed: serde_json::Value = serde_json::from_str(raw_json).unwrap_or_default();
             let display = parsed["display_name"].as_str().unwrap_or(codename);

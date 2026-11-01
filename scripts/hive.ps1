@@ -1,217 +1,118 @@
-<#
-.SYNOPSIS
-    H.I.V.E. Autonomous AI Agency CLI Tool
-    Controls headless rendering, screenshots, test execution, and scene management.
-
-.DESCRIPTION
-    Provides automated CLI commands for H.I.V.E. developers:
-    - capture   : Takes headless screenshots of 3D cybernetic scenes and workspaces
-    - test      : Runs the comprehensive end-to-end test suite in batchmode
-    - scenes    : Re-generates or verifies all 7 operational scenes and prefabs
-    - doctor    : Validates Unity environment, agent schemas, licenses, and dependencies
-
-.EXAMPLE
-    .\scripts\hive.ps1 capture --all --res 1920x1080
-    .\scripts\hive.ps1 capture --scene CommandChamber --res 3840x2160 --out ./stills
-    .\scripts\hive.ps1 test
-    .\scripts\hive.ps1 doctor
-#>
-
 param(
-    [string]$Command = "help"
+    [Parameter(Position = 0)]
+    [string]$Command = "help",
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Rest
 )
-
-$RemainingArgs = $args
 
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Split-Path -Parent $ScriptDir
-
-# Locate Unity executable
-$UnityPaths = @(
-    "C:\Program Files\Unity\Hub\Editor\6000.6.7f1\Editor\Unity.exe",
-    "C:\Program Files\Unity\Editor\Unity.exe"
-)
-
-$UnityExe = $null
-foreach ($path in $UnityPaths) {
-    if (Test-Path $path) {
-        $UnityExe = $path
-        break
-    }
-}
-
-if (-not $UnityExe) {
-    $found = Get-ChildItem -Path "C:\Program Files\Unity\Hub\Editor" -Filter "Unity.exe" -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($found) { $UnityExe = $found.FullName }
-}
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$TauriDir = Join-Path $ProjectRoot "src-tauri"
+$DebugExe = Join-Path $TauriDir "target\debug\hive-desktop.exe"
+$ReleaseExe = Join-Path $TauriDir "target\release\hive-desktop.exe"
+Set-Location $ProjectRoot
 
 function Show-Header {
-    Write-Host "==================================================================" -ForegroundColor Green
-    Write-Host "  ⬡ H.I.V.E. // AUTONOMOUS AI AGENCY CLI TOOL" -ForegroundColor Green
-    Write-Host "==================================================================" -ForegroundColor DarkGreen
+    Write-Host ""
+    Write-Host "  H.I.V.E. Desktop CLI" -ForegroundColor Green
+    Write-Host "  ---------------------" -ForegroundColor DarkGreen
 }
 
-function Invoke-Capture {
-    param([string[]]$ArgsList)
-
-    $scene = "all"
-    $res = "1920x1080"
-    $outDir = "Screenshots"
-    $mode = ""
-
-    for ($i = 0; $i -lt $ArgsList.Length; $i++) {
-        $a = $ArgsList[$i]
-        if ($a -eq "--all" -or $a -eq "-all") { $scene = "all" }
-        elseif ($a -eq "--scene" -or $a -eq "-s") { $scene = $ArgsList[++$i] }
-        elseif ($a -eq "--res" -or $a -eq "-r") { $res = $ArgsList[++$i] }
-        elseif ($a -eq "--out" -or $a -eq "-o") { $outDir = $ArgsList[++$i] }
-        elseif ($a -eq "--mode" -or $a -eq "-m") { $mode = $ArgsList[++$i] }
-    }
-
-    Write-Host "[HIVE CLI] Dispatching Headless Screenshot Capture..." -ForegroundColor Cyan
-    Write-Host "  Scene:      $scene" -ForegroundColor Gray
-    Write-Host "  Resolution: $res" -ForegroundColor Gray
-    Write-Host "  Output Dir: $outDir" -ForegroundColor Gray
-    if ($mode) { Write-Host "  CameraMode: $mode" -ForegroundColor Gray }
-
-    $targetDir = Join-Path $ProjectRoot $outDir
-    if (-not (Test-Path $targetDir)) {
-        New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-    }
-
-    $logFile = Join-Path $ProjectRoot "capture.log"
-    $unityArgs = @(
-        "-batchmode",
-        "-quit",
-        "-projectPath", "`"$ProjectRoot`"",
-        "-executeMethod", "HIVE.Editor.HiveScreenshotCapture.CaptureCLI",
-        "-scene", $scene,
-        "-res", $res,
-        "-out", "`"$targetDir`""
-    )
-    if ($mode) {
-        $unityArgs += @("-cameraMode", $mode)
-    }
-    $unityArgs += @("-logFile", "`"$logFile`"")
-
-    $argString = $unityArgs -join " "
-    Write-Host "[HIVE CLI] Launching Unity batchmode renderer..." -ForegroundColor DarkCyan
-
-    $process = Start-Process -FilePath $UnityExe -ArgumentList $argString -PassThru -Wait
-    $exitCode = $process.ExitCode
-
-    if (Test-Path $logFile) {
-        $captures = Get-Content $logFile | Select-String "\[OK\] Captured"
-        foreach ($c in $captures) {
-            Write-Host "  $c" -ForegroundColor Green
-        }
-    }
-
-    if ($exitCode -eq 0) {
-        Write-Host "[HIVE CLI] SUCCESS: All requested screenshots captured!" -ForegroundColor Green
-        $files = Get-ChildItem -Path $targetDir -Filter "*.png" | Sort-Object LastWriteTime -Descending | Select-Object -First 7
-        Write-Host "`nRecent captures in $outDir`:" -ForegroundColor Cyan
-        foreach ($f in $files) {
-            Write-Host "  - $($f.Name) ($([math]::Round($f.Length / 1KB, 1)) KB)" -ForegroundColor Gray
-        }
-    } else {
-        Write-Host "[HIVE CLI] ERROR: Capture failed with exit code $exitCode. See capture.log for details." -ForegroundColor Red
+function Assert-Tool([string]$Name, [string]$Hint) {
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        Write-Host "  [FAIL] '$Name' not found. $Hint" -ForegroundColor Red
+        exit 1
     }
 }
 
-function Invoke-Test {
-    Write-Host "[HIVE CLI] Running Comprehensive E2E Validation Suite..." -ForegroundColor Cyan
-    $logFile = Join-Path $ProjectRoot "unity_e2e.log"
-    $unityArgs = "-batchmode -quit -projectPath `"$ProjectRoot`" -executeMethod HIVE.Editor.HiveE2ETest.RunAllTests -logFile `"$logFile`""
+function Invoke-Npm([string[]]$NpmArgs) {
+    & npm @NpmArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
-    $process = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru -Wait
-    $exitCode = $process.ExitCode
-
-    if (Test-Path $logFile) {
-        Get-Content $logFile | Select-String "\[HIVE E2E\]" | ForEach-Object {
-            if ($_ -match "\[PASS\]") {
-                Write-Host "  $_" -ForegroundColor Green
-            } elseif ($_ -match "\[FAIL\]") {
-                Write-Host "  $_" -ForegroundColor Red
-            } else {
-                Write-Host "  $_" -ForegroundColor Cyan
-            }
-        }
-    }
-
-    if ($exitCode -eq 0) {
-        Write-Host "[HIVE CLI] ALL SUITES PASSED! System operational." -ForegroundColor Green
-    } else {
-        Write-Host "[HIVE CLI] SUITE FAILED with exit code $exitCode." -ForegroundColor Red
+function Ensure-Deps {
+    if (-not (Test-Path (Join-Path $ProjectRoot "node_modules"))) {
+        Write-Host "  Installing npm dependencies..." -ForegroundColor Cyan
+        Invoke-Npm @("ci", "--no-audit", "--no-fund")
     }
 }
 
-function Invoke-Scenes {
-    Write-Host "[HIVE CLI] Rebuilding all 7 operational HQ scenes and prefabs..." -ForegroundColor Cyan
-    $logFile = Join-Path $ProjectRoot "build_scenes.log"
-    $unityArgs = "-batchmode -quit -projectPath `"$ProjectRoot`" -executeMethod HIVE.Editor.HiveSceneBuilder.BuildAll -logFile `"$logFile`""
-
-    $process = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru -Wait
-    if ($process.ExitCode -eq 0) {
-        Write-Host "[HIVE CLI] All 7 scenes and prefabs rebuilt successfully." -ForegroundColor Green
-    } else {
-        Write-Host "[HIVE CLI] Scene build failed. See build_scenes.log." -ForegroundColor Red
-    }
+function Invoke-Dev {
+    Assert-Tool "npm" "Install Node.js 20+."
+    Assert-Tool "cargo" "Install Rust from https://rustup.rs."
+    Ensure-Deps
+    Invoke-Npm @("run", "build")
+    & cargo run --manifest-path (Join-Path $TauriDir "Cargo.toml")
+    exit $LASTEXITCODE
 }
 
 function Invoke-Build {
-    Write-Host "[HIVE CLI] Compiling Standalone Windows 64-bit Binary..." -ForegroundColor Cyan
-    $buildsDir = Join-Path $ProjectRoot "Builds"
-    if (-not (Test-Path $buildsDir)) {
-        New-Item -ItemType Directory -Force -Path $buildsDir | Out-Null
-    }
-    $targetExe = Join-Path $buildsDir "HIVE.exe"
-    $logFile = Join-Path $ProjectRoot "build_player.log"
-    $unityArgs = "-batchmode -quit -projectPath `"$ProjectRoot`" -executeMethod HIVE.Editor.HiveSceneBuilder.BuildStandalonePlayer -logFile `"$logFile`""
+    Assert-Tool "npm" "Install Node.js 20+."
+    Assert-Tool "cargo" "Install Rust from https://rustup.rs."
+    Ensure-Deps
+    Invoke-Npm @("run", "tauri", "build")
+    Write-Host "  [OK] Installers are in src-tauri\target\release\bundle" -ForegroundColor Green
+}
 
-    Write-Host "  Target:  $targetExe" -ForegroundColor Gray
-    Write-Host "  Compiling operational scenes, assets, and cybernetic runtime..." -ForegroundColor DarkCyan
+function Invoke-Test {
+    Assert-Tool "npm" "Install Node.js 20+."
+    Assert-Tool "cargo" "Install Rust from https://rustup.rs."
+    Ensure-Deps
+    Write-Host "  [1/2] Constitution check, typecheck and frontend build..." -ForegroundColor Cyan
+    Invoke-Npm @("test")
+    Write-Host "  [2/2] Rust tests..." -ForegroundColor Cyan
+    & cargo test --manifest-path (Join-Path $TauriDir "Cargo.toml")
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "  [OK] All checks passed." -ForegroundColor Green
+}
 
-    $process = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru -Wait
-    if ($process.ExitCode -eq 0 -and (Test-Path $targetExe)) {
-        $sizeMb = [math]::Round((Get-Item $targetExe).Length / 1MB, 2)
-        Write-Host "[HIVE CLI] SUCCESS: Standalone Windows Binary built! ($sizeMb MB)" -ForegroundColor Green
-        Write-Host "Execute directly via: .\Builds\HIVE.exe or hive launch" -ForegroundColor Cyan
-    } else {
-        Write-Host "[HIVE CLI] ERROR: Player build failed with code $($process.ExitCode). See build_player.log." -ForegroundColor Red
+function Invoke-Launch {
+    $exe = if (Test-Path $ReleaseExe) { $ReleaseExe } elseif (Test-Path $DebugExe) { $DebugExe } else { $null }
+    if (-not $exe) {
+        Write-Host "  No build found. Building a debug binary first..." -ForegroundColor Yellow
+        Ensure-Deps
+        Invoke-Npm @("run", "build")
+        & cargo build --manifest-path (Join-Path $TauriDir "Cargo.toml")
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $exe = $DebugExe
     }
+    Start-Process -FilePath $exe -WindowStyle Maximized
+    Write-Host "  [OK] H.I.V.E. launched from $exe (tray icon active, Ctrl+Shift+H toggles the window)" -ForegroundColor Green
 }
 
 function Invoke-Doctor {
-    Write-Host "[HIVE CLI] Running Agency Health Doctor..." -ForegroundColor Cyan
+    Write-Host "  Checking environment..." -ForegroundColor Cyan
 
-    # Unity check
-    if ($UnityExe -and (Test-Path $UnityExe)) {
-        Write-Host "  [OK] Unity Editor found: $UnityExe" -ForegroundColor Green
-    } else {
-        Write-Host "  [FAIL] Unity Editor not located." -ForegroundColor Red
+    foreach ($tool in @(
+        @{ Name = "node"; Hint = "Install Node.js 20+." },
+        @{ Name = "npm"; Hint = "Install Node.js 20+." },
+        @{ Name = "cargo"; Hint = "Install Rust from https://rustup.rs." },
+        @{ Name = "curl.exe"; Hint = "Agents call NVIDIA NIM through curl.exe (ships with Windows 10+)." }
+    )) {
+        $cmd = Get-Command $tool.Name -ErrorAction SilentlyContinue
+        if ($cmd) {
+            Write-Host "  [OK] $($tool.Name): $($cmd.Source)" -ForegroundColor Green
+        } else {
+            Write-Host "  [FAIL] $($tool.Name) not found. $($tool.Hint)" -ForegroundColor Red
+        }
     }
 
-    # Agent JSONs
-    $agentsDir = Join-Path $ProjectRoot "Assets\StreamingAssets\agents"
+    $agentsDir = Join-Path $ProjectRoot "agents"
     $agents = Get-ChildItem -Path $agentsDir -Filter "*.json" -ErrorAction SilentlyContinue
     if ($agents.Count -eq 12) {
-        Write-Host "  [OK] 12 Persistent Agent Schemas verified in StreamingAssets." -ForegroundColor Green
+        $bad = @()
+        foreach ($a in $agents) {
+            try { Get-Content $a.FullName -Raw | ConvertFrom-Json | Out-Null } catch { $bad += $a.Name }
+        }
+        if ($bad.Count -eq 0) {
+            Write-Host "  [OK] 12 agent definitions parse cleanly in agents/." -ForegroundColor Green
+        } else {
+            Write-Host "  [FAIL] Invalid JSON in: $($bad -join ', ')" -ForegroundColor Red
+        }
     } else {
-        Write-Host "  [FAIL] Expected 12 agents, found $($agents.Count)." -ForegroundColor Red
+        Write-Host "  [FAIL] Expected 12 agent definitions in agents/, found $($agents.Count)." -ForegroundColor Red
     }
 
-    # Scenes
-    $scenesDir = Join-Path $ProjectRoot "Assets\Scenes"
-    $scenes = Get-ChildItem -Path $scenesDir -Filter "*.unity" -ErrorAction SilentlyContinue
-    if ($scenes.Count -ge 7) {
-        Write-Host "  [OK] 7 Operational Scenes verified ($($scenes.Count) found)." -ForegroundColor Green
-    } else {
-        Write-Host "  [WARN] Expected 7 scenes, found $($scenes.Count). Run 'hive scenes' to rebuild." -ForegroundColor Yellow
-    }
-
-    # NIM API Key check
     $nimKey = $null
     $nimScope = $null
     foreach ($scope in @("Process", "User", "Machine")) {
@@ -228,118 +129,62 @@ function Invoke-Doctor {
         Write-Host "  [WARN] NVIDIA_API_KEY not set. Agents can't reach their models and will say so in chat until it's set." -ForegroundColor Yellow
     }
 
-    # Google Ecosystem / gog CLI check
+    $gog = Get-Command "gog" -ErrorAction SilentlyContinue
     $userProf = [Environment]::GetFolderPath("UserProfile")
-    $gogBat = Join-Path $userProf "gog-wrapper\gog.bat"
-    $gogExe = Join-Path $userProf "go\bin\gog.exe"
-    if (Test-Path $gogBat) {
-        Write-Host "  [OK] Google CLI wrapper detected at $gogBat" -ForegroundColor Green
+    $gogPaths = @($env:GOG_CLI_PATH, (Join-Path $userProf "gog-wrapper\gog.bat"), (Join-Path $userProf "go\bin\gog.exe")) | Where-Object { $_ -and (Test-Path $_) }
+    $gogPath = if ($gogPaths) { $gogPaths[0] } elseif ($gog) { $gog.Source } else { $null }
+    if ($gogPath) {
+        Write-Host "  [OK] Google CLI found: $gogPath" -ForegroundColor Green
         try {
-            $authJson = & "$gogBat" auth status --json 2>$null | Out-String | ConvertFrom-Json
-            if ($authJson -and $authJson.account.email) {
-                Write-Host "  [OK] Google Account authenticated: $($authJson.account.email)" -ForegroundColor Green
+            $auth = & $gogPath auth list --no-input 2>$null | Out-String
+            if ($LASTEXITCODE -eq 0 -and $auth.Trim()) {
+                Write-Host "  [OK] gog auth: $($auth.Trim().Split([Environment]::NewLine)[0])" -ForegroundColor Green
+            } else {
+                Write-Host "  [WARN] gog is installed but not signed in. Run 'gog auth login'." -ForegroundColor Yellow
             }
-        } catch { }
-    } elseif (Test-Path $gogExe) {
-        Write-Host "  [OK] Google CLI detected at $gogExe" -ForegroundColor Green
+        } catch {
+            Write-Host "  [WARN] gog auth check failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
     } else {
-        Write-Host "  [WARN] Google CLI (gog) not detected in standard paths." -ForegroundColor Yellow
+        Write-Host "  [WARN] Google CLI (gog) not found. Set GOG_CLI_PATH or add it to PATH to enable /gog." -ForegroundColor Yellow
+    }
+
+    $vault = if ($env:HIVE_OBSIDIAN_VAULT) { $env:HIVE_OBSIDIAN_VAULT } else { Join-Path ([Environment]::GetFolderPath("MyDocuments")) "HIVE-Vault" }
+    if (Test-Path $vault) {
+        Write-Host "  [OK] Obsidian vault: $vault" -ForegroundColor Green
+    } else {
+        Write-Host "  [INFO] Obsidian vault will be created on first use at $vault" -ForegroundColor DarkCyan
+    }
+
+    $dataDir = Join-Path $env:APPDATA "Lushapps\HIVE\data\hive.db"
+    if (Test-Path $dataDir) {
+        Write-Host "  [OK] Database: $dataDir" -ForegroundColor Green
+    } else {
+        Write-Host "  [INFO] No database yet. It's created on first launch at $dataDir" -ForegroundColor DarkCyan
     }
 }
 
 function Show-Help {
-    Show-Header
     Write-Host @"
-USAGE:
-  hive <command> [options]
 
-COMMANDS:
-  launch           Launch interactive H.I.V.E. Unity Editor & Command Chamber
-  capture          Take headless 3D screenshots of operational scenes
-  test             Execute comprehensive end-to-end integration test suite
-  scenes           Rebuild and wire all 7 HQ scenes and cybernetic prefabs
-  doctor           Inspect health of Unity, schemas, scenes, and API keys
-  gog <args>       Run Google Ecosystem CLI directly with authentication
-  help             Show this help reference
+  Usage: hive <command>
 
-CAPTURE OPTIONS:
-  --all            Capture all 7 operational scenes (default: all)
-  --scene <name>   Capture a specific scene (CommandChamber, Workspaces, etc.)
-  --res <WxH>      Render resolution (e.g. 1920x1080, 3840x2160, 1280x720)
-  --out <dir>      Output directory for screenshots (default: Screenshots)
-  --mode <mode>    Camera mode: FirstPerson, ThirdPerson, Isometric, Overview
+  dev       Build the frontend and run the desktop app from source
+  build     Produce release installers with 'tauri build'
+  test      Constitution check, typecheck, frontend build and Rust tests
+  launch    Start the built app (builds a debug binary if none exists)
+  doctor    Check tools, agent definitions, API key, Google CLI and vault
+  help      Show this message
 
-EXAMPLES:
-  .\hive.cmd launch
-  .\hive.cmd capture
-  .\hive.cmd capture --scene CommandChamber --res 3840x2160 --out stills
-  .\hive.cmd test
-  .\hive.cmd doctor
 "@
 }
 
-function Invoke-Launch {
-    Write-Host "[HIVE CLI] Initiating Agency Launch Protocol..." -ForegroundColor Cyan
-    
-    # 1. Run recovery watchdog check
-    Write-Host "  [1/3] Verifying Recovery Supervisor..." -ForegroundColor Gray
-    try {
-        & py "$ProjectRoot\scripts\recovery\hive_recovery.py" watchdog
-    } catch {
-        Write-Host "  [WARN] Watchdog check encountered an issue." -ForegroundColor Yellow
-    }
-
-    # 2. Check binary
-    $targetExe = Join-Path $ProjectRoot "Builds\HIVE.exe"
-    if (-not (Test-Path $targetExe)) {
-        Write-Host "  [2/3] Standalone player not found. Compiling native executable..." -ForegroundColor Yellow
-        Invoke-Build
-    } else {
-        Write-Host "  [2/3] Standalone HIVE binary verified." -ForegroundColor Gray
-    }
-
-    # 3. Launch
-    if (Test-Path $targetExe) {
-        Write-Host "  [3/3] Launching standalone H.I.V.E. application..." -ForegroundColor Green
-        $buildsDir = Split-Path -Parent $targetExe
-        $proc = Start-Process -FilePath $targetExe -WorkingDirectory $buildsDir -PassThru
-        Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. active! PID: $($proc.Id)" -ForegroundColor Green
-        Write-Host "Binary: $targetExe" -ForegroundColor Cyan
-        Write-Host "12 Autonomous Agents: Standby / Operational" -ForegroundColor DarkCyan
-    } else {
-        Write-Host "  [3/3] Launching in Unity Editor..." -ForegroundColor Green
-        $logFile = Join-Path $ProjectRoot "launch.log"
-        $unityArgs = "-projectPath `"$ProjectRoot`" -logFile `"$logFile`""
-        $proc = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru
-        Write-Host "`n[HIVE CLI] SUCCESS: H.I.V.E. launched in Editor! PID: $($proc.Id)" -ForegroundColor Green
-    }
-}
-
-function Invoke-Gog {
-    param([string[]]$ArgsList)
-    $userProf = [Environment]::GetFolderPath("UserProfile")
-    $gogBat = Join-Path $userProf "gog-wrapper\gog.bat"
-    $gogExe = Join-Path $userProf "go\bin\gog.exe"
-
-    if (Test-Path $gogBat) {
-        & "$gogBat" @ArgsList
-    } elseif (Test-Path $gogExe) {
-        & "$gogExe" @ArgsList
-    } else {
-        Write-Host "[HIVE CLI] Error: gog CLI not found at $gogBat or $gogExe" -ForegroundColor Red
-    }
-}
-
-# Main Dispatch
-switch ($Command) {
-    "launch"  { Show-Header; Invoke-Launch }
-    "run"     { Show-Header; Invoke-Launch }
-    "build"   { Show-Header; Invoke-Build }
-    "capture" { Show-Header; Invoke-Capture -ArgsList $RemainingArgs }
-    "test"    { Show-Header; Invoke-Test }
-    "scenes"  { Show-Header; Invoke-Scenes }
-    "doctor"  { Show-Header; Invoke-Doctor }
-    "gog"     { Invoke-Gog -ArgsList $RemainingArgs }
-    "google"  { Invoke-Gog -ArgsList $RemainingArgs }
-    default   { Show-Help }
+Show-Header
+switch ($Command.ToLower()) {
+    "dev" { Invoke-Dev }
+    "build" { Invoke-Build }
+    "test" { Invoke-Test }
+    "launch" { Invoke-Launch }
+    "doctor" { Invoke-Doctor }
+    default { Show-Help }
 }

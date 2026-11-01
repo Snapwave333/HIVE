@@ -16,7 +16,7 @@
 - [x] Task 1.1: Initialize Tauri 2.0 project structure (`src-tauri` and Vite/React/Tailwind root)
 - [x] Task 1.2: Configure `Cargo.toml` with `tauri = "2"`, `rusqlite = "0.31"`, `tokio = "1"`, `serde`, `serde_json`, `uuid`, `chrono`
 - [x] Task 1.3: Implement SQLite database manager with WAL mode, foreign keys, migrations (`V1__initial_schema.sql`), and schema verification
-- [x] Task 1.4: Implement database seed populating `#agency-hq` (ID 0) and the 12 permanent agents from `Assets/StreamingAssets/agents/*.json`
+- [x] Task 1.4: Implement database seed populating `#agency-hq` (ID 0) and the 12 permanent agents from `agents/*.json`
 - [x] Task 1.5: Implement Tokio event bus (`src-tauri/src/events/`) with typed events: `agent.message.created`, `task.assigned`, `task.completed`, `decision.proposed`, etc.
 - [x] Task 1.6: Implement 3-state Windows Tray Lifecycle (*Open*, *Pause/Resume*, *Toggle Mute*, *Stop*) and `Ctrl+Shift+H` global hotkey
 - [x] Task 1.7: Write and pass Rust unit and integration tests (`cargo test`) -> 7/7 tests passed

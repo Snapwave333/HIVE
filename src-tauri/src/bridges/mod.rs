@@ -115,12 +115,8 @@ impl EcosystemBridges {
         let browser_relay_available = Self::check_browser_relay().is_ok();
         let voice_engine_available = Self::check_voice_engine().is_ok();
 
-        let llm_provider = if Self::get_env_key("NVIDIA_API_KEY").is_some()
-            || Self::get_env_key("NIM_API_KEY").is_some()
-        {
-            "NVIDIA NIM Cascade (Live)".to_string()
-        } else if Self::get_env_key("GEMINI_API_KEY").is_some() {
-            "Google Gemini API (Live)".to_string()
+        let llm_provider = if Self::llm_configured() {
+            "NVIDIA NIM (API key set)".to_string()
         } else {
             "Unconfigured (Set NVIDIA_API_KEY)".to_string()
         };

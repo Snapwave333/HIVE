@@ -20,7 +20,6 @@ fn test_database_initialization_and_seeding() {
     assert_eq!(hq.name, "agency-hq");
     assert!(hq.pinned, "#agency-hq must be pinned");
 
-    // Verify 12 permanent agents with rich metadata from StreamingAssets
     let agents = db.get_agents().expect("Should retrieve agents");
     assert_eq!(agents.len(), 12, "Expected exactly 12 permanent agents");
 

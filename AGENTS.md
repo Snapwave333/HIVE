@@ -19,7 +19,7 @@ The 12 permanent agents of the autonomous AI agency. Each has a distinct role, i
 
 ## Agent Definition Schema
 
-Each agent is defined in `Assets/StreamingAssets/agents/{codename}.json`:
+Each agent is defined in `agents/{codename}.json`:
 
 ```json
 {
@@ -76,7 +76,7 @@ The goal: "#agency-hq" should feel like opening a group chat with 12 smart cowor
 
 How the style guide and roster above are applied by `src-tauri/src/agents`:
 
-- **Single source of truth**: each agent's `personality`, `skills`, `tools`, `role` and `model_tier` are re-synced from `Assets/StreamingAssets/agents/*.json` on every launch, so edits here reach existing installs.
+- **Single source of truth**: each agent's `personality`, `skills`, `tools`, `role` and `model_tier` are re-synced from `agents/*.json` on every launch, so edits here reach existing installs.
 - **One prompt builder**: every agent call (DMs, `#agency-hq`, task steps, check-ins, council votes) uses the same persona prompt, which includes the communication style above, the agent's own memories, and real live data from its station.
 - **Real conversation history**: replies are sent as multi-turn chat with speaker labels, so agents know who said what instead of seeing one flattened blob.
 - **Who answers**: in a DM, that agent replies. In `#agency-hq`, every tagged agent (up to 3, in the order tagged) replies, each seeing the previous replies. With no tag, PRIME replies.
