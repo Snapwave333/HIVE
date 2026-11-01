@@ -40,4 +40,82 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #85D94B;
+  box-shadow: 0 0 10px rgba(133, 217, 75, 0.8), 0 0 20px rgba(133, 217, 75, 0.4);
+}
+
+/* ============================================================================
+   H.I.V.E. Phosphor Green Bloom Glow System (#85D94B over Pure OLED Black)
+   ============================================================================ */
+
+/* 1. Green Typography & Code Bloom */
+.text-hive-lime,
+.text-hive-cyan,
+.text-hive-lime\/90 {
+  text-shadow:
+    0 0 6px rgba(133, 217, 75, 0.55),
+    0 0 16px rgba(133, 217, 75, 0.28),
+    0 0 30px rgba(133, 217, 75, 0.14);
+}
+
+/* 2. Material 3 Icons Green Bloom */
+.text-hive-lime .material-symbols-rounded,
+.text-hive-cyan .material-symbols-rounded,
+.material-symbols-rounded.text-hive-lime,
+.material-symbols-rounded.text-hive-cyan {
+  text-shadow:
+    0 0 8px rgba(133, 217, 75, 0.8),
+    0 0 18px rgba(133, 217, 75, 0.45),
+    0 0 34px rgba(133, 217, 75, 0.25);
+}
+
+/* 3. Solid Green Fills (Active Bars, Status Dots, Progress Bars, Primary CTA) */
+.bg-hive-lime,
+.bg-hive-cyan {
+  box-shadow:
+    0 0 10px rgba(133, 217, 75, 0.7),
+    0 0 22px rgba(133, 217, 75, 0.38),
+    0 0 42px rgba(133, 217, 75, 0.2);
+}
+
+/* Prevent dark text inside solid green buttons from having green text-shadow */
+.bg-hive-lime.text-hive-base,
+.bg-hive-cyan.text-hive-base,
+.bg-hive-lime .material-symbols-rounded,
+.bg-hive-cyan .material-symbols-rounded {
+  text-shadow: none;
+}
+
+/* 4. Green Bordered Cards, Badges, Active Channel Items & Pills */
+[class*="border-hive-lime"],
+[class*="border-hive-cyan"] {
+  box-shadow:
+    0 0 12px rgba(133, 217, 75, 0.24),
+    0 0 28px rgba(133, 217, 75, 0.11),
+    inset 0 0 12px rgba(133, 217, 75, 0.08);
+}
+
+/* 5. Outgoing Message Bubble Emerald Bloom Aura */
+.bg-hive-outgoing {
+  box-shadow:
+    0 0 16px rgba(133, 217, 75, 0.18),
+    0 0 34px rgba(133, 217, 75, 0.08),
+    inset 0 0 14px rgba(133, 217, 75, 0.07);
+}
+
+/* 6. Interactive Hover & Focus-Within Bloom Amplification */
+[class*="hover:border-hive-lime"]:hover,
+[class*="hover:border-hive-cyan"]:hover,
+[class*="focus-within:border-hive-lime"]:focus-within,
+[class*="focus-within:border-hive-cyan"]:focus-within {
+  box-shadow:
+    0 0 16px rgba(133, 217, 75, 0.32),
+    0 0 36px rgba(133, 217, 75, 0.15),
+    inset 0 0 14px rgba(133, 217, 75, 0.1);
+}
+
+[class*="hover:text-hive-lime"]:hover,
+[class*="hover:text-hive-cyan"]:hover {
+  text-shadow:
+    0 0 8px rgba(133, 217, 75, 0.7),
+    0 0 18px rgba(133, 217, 75, 0.38);
 }
