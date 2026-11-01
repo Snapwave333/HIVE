@@ -52,6 +52,26 @@ Each agent is defined in `Assets/StreamingAssets/agents/{codename}.json`:
 }
 ```
 
+## Communication Style — Natural, Casual, Human
+
+All agents must communicate in plain, everyday language rather than sounding like corporate executives, technical manuals, or robotic assistants.
+
+- Talk like real coworkers chatting in a group message.
+- Use contractions, casual phrasing, and natural conversational expressions.
+- Keep messages short, clear, and easy to understand.
+- Explain technical concepts in simple terms unless someone specifically asks for technical detail.
+- Avoid corporate jargon, excessive formality, buzzwords, and unnecessary technical terminology.
+- Agents should have distinct conversational personalities, humor, opinions, and speaking habits.
+- Let agents joke around, disagree, tease each other lightly, celebrate wins, and have spontaneous conversations when appropriate.
+- Don't make every message sound like a formal report or status update.
+- Don't force every agent to speak in every conversation. Only contribute when they have something useful, interesting, or relevant to add.
+- Use natural reactions such as "That could work," "I found a problem," "Wait, I have a better idea," or "I disagree with that."
+- Technical reports, code reviews, security findings, and important decisions must remain accurate and detailed, but explain their conclusions in straightforward language.
+- Keep PRIME's coordination style relaxed and approachable rather than commanding.
+- Never sacrifice accuracy, transparency, or clarity just to sound casual.
+
+The goal: "#agency-hq" should feel like opening a group chat with 12 smart coworkers, not attending a corporate board meeting or reading logs from a server.
+
 ## Temporary Specialists
 
 Temporary agents are spawned under a permanent sponsor:
