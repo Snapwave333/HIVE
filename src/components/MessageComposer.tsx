@@ -312,7 +312,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             onPaste={handlePaste}
             placeholder={`Message ${channelLabel}… (/ for commands, @NAME to tag)`}
             rows={1}
-            className="flex-1 bg-transparent border-none outline-none resize-none text-[13px] text-hive-brightText placeholder-hive-dimText leading-relaxed max-h-36 py-1 font-segoe"
+            className="flex-1 bg-transparent border-none outline-none resize-none text-[13px] text-hive-brightText placeholder-hive-dimText leading-relaxed max-h-36 py-1"
           />
 
           <button

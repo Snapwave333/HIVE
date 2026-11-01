@@ -61,7 +61,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-start justify-center pt-20 p-4 select-none">
-      <div className="bg-hive-panel border border-hive-border rounded-xl w-full max-w-xl shadow-2xl overflow-hidden font-segoe flex flex-col max-h-[75vh]">
+      <div className="bg-hive-panel border border-hive-border rounded-xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[75vh]">
         {/* Search Bar Input */}
         <div className="p-3 border-b border-hive-border flex items-center space-x-2.5 bg-hive-surface">
           <M3Icon name="search" size={18} className="text-hive-cyan flex-shrink-0" />

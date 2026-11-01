@@ -468,3 +468,12 @@ fn queued_tasks_use_the_owners_steps_or_a_real_planner() {
     let msg = hive_lib::AppState::queued_message(&plan);
     assert!(msg.contains("1. List orphaned files (~5m)") && msg.contains("@ARCHIVIST"));
 }
+
+#[test]
+fn text_size_is_clamped_to_the_accessible_range() {
+    use hive_lib::commands::{clamp_text_size, BASE_TEXT_SIZE};
+    assert_eq!(clamp_text_size(16.0), 16.0);
+    assert_eq!(clamp_text_size(4.0), 12.0);
+    assert_eq!(clamp_text_size(99.0), 20.0);
+    assert_eq!(clamp_text_size(f64::NAN), BASE_TEXT_SIZE);
+}

@@ -862,6 +862,18 @@ pub fn run() {
             });
 
             if let Some(window) = handle.get_webview_window("main") {
+                let saved_size = handle
+                    .state::<AppState>()
+                    .db
+                    .get_setting("font_size")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(commands::clamp_text_size)
+                    .unwrap_or(commands::BASE_TEXT_SIZE);
+                if (saved_size - commands::BASE_TEXT_SIZE).abs() > f64::EPSILON {
+                    let _ = window.set_zoom(saved_size / commands::BASE_TEXT_SIZE);
+                }
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.maximize();
@@ -904,6 +916,7 @@ pub fn run() {
             commands::search_unified,
             commands::get_bridge_status,
             commands::open_external,
+            commands::set_text_size,
             commands::set_nim_api_key,
             commands::execute_google_query,
             commands::write_obsidian_note,

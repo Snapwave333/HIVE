@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./assets/icons/material-symbols.css";
+import "./assets/fonts/accessibility.css";
 import { App } from "./App";
 import "./index.css";
 

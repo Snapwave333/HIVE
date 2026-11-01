@@ -173,7 +173,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
-      <div className="bg-hive-panel border border-hive-border rounded-xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden font-segoe">
+      <div className="bg-hive-panel border border-hive-border rounded-xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="p-4 border-b border-hive-border flex items-center justify-between">
           <div className="flex items-center space-x-2">

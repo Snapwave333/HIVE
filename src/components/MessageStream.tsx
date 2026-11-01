@@ -241,7 +241,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
   };
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 py-6 bg-hive-base font-segoe select-text">
+    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 py-6 bg-hive-base select-text">
       <div className="max-w-5xl mx-auto w-full space-y-5">
       {hasOlder && (
         <div className="flex justify-center">

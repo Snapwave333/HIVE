@@ -365,6 +365,29 @@ pub fn open_external(url: String, app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+pub const BASE_TEXT_SIZE: f64 = 14.0;
+
+pub fn clamp_text_size(size: f64) -> f64 {
+    if size.is_finite() {
+        size.clamp(12.0, 20.0)
+    } else {
+        BASE_TEXT_SIZE
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn set_text_size(size: f64, app: AppHandle, state: State<'_, AppState>) -> Result<f64, String> {
+    let size = clamp_text_size(size);
+    state
+        .db
+        .set_setting("font_size", &format!("{}", size as u32))
+        .map_err(|e| e.to_string())?;
+    if let Some(w) = app.get_webview_window("main") {
+        w.set_zoom(size / BASE_TEXT_SIZE).map_err(|e| e.to_string())?;
+    }
+    Ok(size)
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub fn get_agency_state(state: State<'_, AppState>) -> Result<String, String> {
     let s = match state.daemon.state() {

@@ -317,7 +317,7 @@ export const App: React.FC = () => {
   const handleSetFontSize = (size: number) => {
     const clamped = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, size));
     setFontSize(clamped);
-    api.setSetting("font_size", String(clamped)).catch(() => {});
+    api.setTextSize(clamped).catch((e) => console.warn("Text size not applied:", e));
   };
 
   const typingAgents = Object.values(typingByChannel[activeChannelId] || {});
@@ -458,7 +458,6 @@ export const App: React.FC = () => {
     <HiveErrorBoundary>
       <div
         className={`h-screen w-screen flex bg-hive-base text-hive-brightText overflow-hidden select-none ${fontClass}`}
-        style={{ fontSize: `${fontSize}px` }}
       >
         {!isFocusMode && (
           <NavRail
