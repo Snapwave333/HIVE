@@ -9,6 +9,9 @@ import { MessageComposer } from "./components/MessageComposer";
 import { SettingsModal } from "./components/SettingsModal";
 import { SearchModal } from "./components/SearchModal";
 
+const AUTO_ROLLBACK_KEY = "hive.lastAutoRollback";
+const AUTO_ROLLBACK_COOLDOWN_MS = 5 * 60 * 1000;
+
 class HiveErrorBoundary extends Component<
   { children: ReactNode },
   { hasError: boolean; errorMsg: string; recovery: string }
@@ -23,7 +26,15 @@ class HiveErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("H.I.V.E. UI error, attempting rollback:", error, errorInfo);
+    console.error("H.I.V.E. UI error:", error, errorInfo);
+    const last = Number(localStorage.getItem(AUTO_ROLLBACK_KEY) || 0);
+    if (Date.now() - last < AUTO_ROLLBACK_COOLDOWN_MS) {
+      this.setState({
+        recovery: "The UI already rolled back once in the last few minutes, so it won't keep flipping. Reload to try again, or roll back manually in Settings → Snapshots.",
+      });
+      return;
+    }
+    localStorage.setItem(AUTO_ROLLBACK_KEY, String(Date.now()));
     api
       .rollbackUiVersion(`Auto-rollback from ErrorBoundary: ${error.message}`)
       .then((dep) => this.setState({ recovery: `Rolled back to ${dep.version}. The window will reload onto it.` }))
