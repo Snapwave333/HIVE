@@ -185,9 +185,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 {activeChannelId === 0 && (
                   <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r bg-hive-lime" />
                 )}
-                <div className="w-10 h-10 rounded-xl bg-hive-base border border-hive-lime/40 flex items-center justify-center text-hive-lime font-bold text-lg flex-shrink-0">
-                  <M3Icon name="hub" filled size={20} />
-                </div>
+                <img
+                  src="/avatars/HQ.png"
+                  alt="#agency-hq"
+                  className="w-10 h-10 rounded-xl object-cover border border-hive-lime/40 flex-shrink-0"
+                />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">

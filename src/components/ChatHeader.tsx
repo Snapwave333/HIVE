@@ -25,13 +25,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     <header className="h-16 bg-hive-panel border-b border-hive-border px-6 flex items-center justify-between select-none flex-shrink-0">
       {/* Left: Channel / Agent Identity */}
       <div className="flex items-center space-x-3.5 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-hive-surface border border-hive-lime/40 text-hive-lime flex items-center justify-center font-bold text-xs flex-shrink-0">
-          {channel.id === 0 ? (
-            <M3Icon name="hub" filled size={20} />
-          ) : (
-            channel.name.slice(0, 2).toUpperCase()
-          )}
-        </div>
+        <img
+          src={channel.id === 0 ? "/avatars/HQ.png" : `/avatars/${channel.agent_codename || "PRIME"}.png`}
+          alt={channel.name}
+          className="w-10 h-10 rounded-xl object-cover border border-hive-lime/50 flex-shrink-0"
+        />
 
         <div className="min-w-0 space-y-0.5">
           <div className="flex items-center space-x-2.5">

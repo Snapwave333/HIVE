@@ -1,7 +1,0 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
-    <ui:Style src="../Styles/HiveHUD.uss" />
-    <ui:VisualElement name="notification-root" style="flex-grow: 1;">
-        <ui:VisualElement name="toast-container" class="toast-container" />
-        <ui:VisualElement name="history-panel" class="history-panel" style="display: none;" />
-    </ui:VisualElement>
-</ui:UXML>

@@ -73,8 +73,20 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
         return (
           <div
             key={msg.id}
-            className={`flex flex-col group ${isUser ? "items-end" : "items-start"}`}
+            className={`flex items-start gap-3 group ${isUser ? "justify-end" : "justify-start"}`}
           >
+            {!isUser && (
+              <img
+                src={`/avatars/${agent?.codename || msg.sender}.png`}
+                alt={agent?.display_name || msg.sender}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/avatars/PRIME.png";
+                }}
+                className="w-9 h-9 rounded-xl object-cover border border-hive-lime/40 flex-shrink-0 mt-1"
+              />
+            )}
+
+            <div className={`flex flex-col max-w-[82%] ${isUser ? "items-end" : "items-start"}`}>
             {/* Sender Name & Role Label */}
             {!isUser && (
               <div className="flex items-center space-x-2.5 mb-1.5 px-1 select-none">
@@ -95,7 +107,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
 
             {/* Bubble Container */}
             <div
-              className={`max-w-[82%] rounded-2xl px-4 py-3 relative border transition-colors ${
+              className={`w-full rounded-2xl px-4 py-3 relative border transition-colors ${
                 isUser
                   ? "bg-hive-outgoing border-hive-outgoingBorder text-hive-brightText rounded-tr-sm"
                   : "bg-hive-incoming border-hive-border text-hive-brightText rounded-tl-sm"
